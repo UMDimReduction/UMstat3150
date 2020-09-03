@@ -57,7 +57,6 @@ So for example, we can use `filter()` to select every flight in flights that dep
 filter(flights, month == 1, day == 1)
 ```
 
-
 ###  output
 
 Like all dplyr functions, `filter()` returns a new data frame for you to save or use. It doesn't overwrite the old data frame. 

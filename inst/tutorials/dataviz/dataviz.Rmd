@@ -1,0 +1,134 @@
+---
+title: "Data Visualization Principles"
+output: 
+  learnr::tutorial:
+    progressive: true
+    allow_skip: true
+runtime: shiny_prerendered
+description: >
+  Learn basic principles to make effective data visualizations.
+---
+
+```{r setup, include=FALSE}
+library(learnr)
+library(tidyverse)
+library(dslabs)
+library(gridExtra)
+
+tutorial_options(exercise.timelimit = 60)
+knitr::opts_chunk$set(error = TRUE)
+```
+
+## Welcome
+
+This is a tutorial on data visualization principles. It was created for the course STAT3150--Statistical Computing at the University of Manitoba.
+
+###  
+
+In this tutorial, you will learn how to:
+
+  * choose the right visual cues for your data visualization
+  * understand when the axis should include 0
+  * how some visual cues can distort quantities
+  * emphasize important comparisons
+
+The readings in this tutorial follow the book [_Introduction to Data Science_](https://rafalab.github.io/dsbook/) by Rafael Irizarry, Chapter 9.
+
+We will use the `dslabs` package to illustrate the main points.
+
+## Visual Cues
+
+### Visual toolbox
+
+Let's say we want to create a data visualization based on a single variable (e.g. age, income, blood pressure). In class, we discussed several graphics that can be used: histograms, bar plots, boxplots, etc. But what if we also want to highlight *differences* between subgroups?
+
+As data analysts, we have several visual cues we can use:
+
+  - position
+  - angle
+  - length
+  - area
+  - colour
+  - angle
+  
+Not all visual cues are created equal! It turns out that humans are much better at understanding some visual cues (e.g. lengths) than others (e.g. volumes).
+
+### Pie charts
+
+Pie charts form somewhat of a paradox: they are very popular, and yet they are generally considered poor data visualizations. Let's look at an example:
+
+```{r pie1}
+# Browser preference
+df <- data.frame(
+  "Browser" = c("Opera", "Safari", "Firefox", "Chrome", "IE"),
+  "Y2000" = c(3, 21, 23, 26, 28),
+  "Y2015" = c(2, 22, 21, 29, 27)
+)
+```
+
+```{r pie2, exercise = TRUE}
+# Can trick ggplot to make a pie chart:
+# Make a bar chart in polar coordinates
+ggplot(df, aes(x = "", y = Y2000, fill = Browser)) + 
+  geom_bar(stat = "identity") + 
+  coord_polar("y", start = 0)
+```
+
+Can you really tell which browser was the most popular in 2000? Angles can be hard to understand on their own, but they are also very hard to compare:
+
+```{r pie3}
+# gather combines Y2000 and Y2015 
+# and adds a key column
+df_tall <- gather(df, "Year", "Percent", 
+                  Y2000, Y2015)
+```
+
+```{r pie3-2, exercise = TRUE}
+ggplot(df_tall, aes(x = "", y = Percent, fill = Browser)) + 
+  geom_bar(stat = "identity") + 
+  coord_polar("y", start = 0) +
+  facet_grid(~Year)
+```
+
+Can you tell if the preference ranking changed between 2000 and 2015? **Pie charts can almost always be replaced by a more useful chart** (or even a table).
+
+In this case, a bar chart can more easily show us changes:
+
+```{r pie4, exercise = TRUE}
+ggplot(df_tall, aes(x = Browser, y = Percent)) + 
+  geom_bar(stat = "identity") + 
+  facet_grid(~Year)
+```
+
+### Hierachy of visual cues
+
+Researchers have found that there is a hierarchy of visual cues, from "accurate" to "generic", and we should aim to be as accurate as possible:
+
+```{r vis-hierarchy, echo = FALSE, out.width = "100%", fig.cap = "The original can be found here: http://paldhous.github.io/ucb/2016/dataviz/week2.html"}
+knitr::include_graphics("images/cue_hierarchy.jpg")
+```
+
+### Exercise
+
+Using the notes and the code above, instead of using `facet_grid`, can you make a bar chart where preference percentages for the same browser are next to one another and of different colour?
+
+```{r pie5, exercise = TRUE}
+
+```
+
+```{r pie5-solution}
+ggplot(df_tall, aes(x = Browser, y = Percent,
+                    fill = Year)) + 
+  geom_bar(stat = "identity",
+           position = "dodge")
+```
+    
+<div id="pie5-hint">
+**Hint:** Use `position = "dodge"`.
+</div>
+
+## Include Zero?
+
+## Distortion
+
+## Important Comparisons

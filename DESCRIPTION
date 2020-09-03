@@ -11,6 +11,7 @@ Description: STAT3150 at the University of Manitoba is a course on Statistical C
 Depends:
   R (>= 3.5.0)
 Imports:
+  dslabs,
   learnr,
   nycflights13,
   shiny,
