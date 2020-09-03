@@ -1,0 +1,20 @@
+Package: UMstat3150
+Type: Package
+Title: Interactive Tutorials on Statistical Computing
+Version: 0.1.0
+Authors@R: c(
+  person("Maxime", "Turgeon", email = "max.turgeon@umanitoba.ca",
+  role = c("aut", "cre"), comment = c(ORCID = "0000-0003-4863-6035")))
+Description: STAT3150 at the University of Manitoba is a course on Statistical Computing.  
+  Using learnr, this package provides interactive tutorials that students can run to practice
+  topics covered in class.
+Depends:
+  R (>= 3.5.0)
+Imports:
+  learnr,
+  nycflights13,
+  shiny,
+  tidyverse
+License: MIT + file LICENSE
+Encoding: UTF-8
+LazyData: true
