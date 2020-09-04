@@ -12,6 +12,7 @@ Depends:
   R (>= 3.5.0)
 Imports:
   dslabs,
+  gridExtra,
   learnr,
   nycflights13,
   shiny,
