@@ -1,0 +1,308 @@
+---
+title: "Generate Random Variables"
+output: 
+  learnr::tutorial:
+    progressive: true
+    allow_skip: true
+runtime: shiny_prerendered
+description: >
+  Learn basic techniques for generating random variates.
+---
+
+```{r setup, include=FALSE}
+library(learnr)
+knitr::opts_chunk$set(echo = FALSE)
+```
+
+## Welcome
+
+This is a tutorial on generating random variates. It was created for the course STAT3150--Statistical Computing at the University of Manitoba.
+
+###  
+
+In this tutorial, we continue our discussion of how to generate random variates. Specifically, we will look at
+
+  * more examples of transformations
+  * more examples of using the accept-reject algorithm
+  * how to generate multivariate random variables
+
+## Transform method
+
+### Box-Muller algorithm
+
+The Box-Muller algorithm is a way to generate standard normal random variables without using the inverse transform. **Why?** The quantile function of the standard normal doesn't have a closed form!
+
+The algorithm is simple, and it relies on the fact that if $X_1,X_2\sim N(0,1)$ are independent, then
+
+  - $X_1^2 + X_2^2 \sim \chi^2(2)$ and therefore $\exp(-0.5(X_1^2 + X_2^2))\sim U(0, 1)$;
+  - $\mathrm{atan2}(X_1, X_2) \sim U(0, 2\pi)$.
+  
+In other words, using polar coordinates, we can relate the standard normal and the uniform distribution. Here's the algorithm:
+
+  1. Generate $U_1,U_2$ independently from $U(0,1)$.
+  2. Set $X_1 = \sqrt{-2\log(U_1)}\cos(2\pi U_2)$ and $X_2 = \sqrt{-2\log(U_1)}\sin(2\pi U_2)$.
+  3. Then $X_1,X_2\sim N(0,1)$ are independent.
+
+Let's look at an example
+
+```{r echo = TRUE, eval = TRUE}
+# We want 1000 samples
+n <- 1000
+unif_vars <- runif(1000)
+# Use first half for log, second half for trig function
+U1 <- unif_vars[1:500]
+U2 <- unif_vars[501:n]
+
+X1 <- sqrt(-2*log(U1)) * cos(2*pi*U2)
+X2 <- sqrt(-2*log(U1)) * sin(2*pi*U2)
+
+# Look at QQ-plot
+qqnorm(c(X1, X2))
+abline(a = 0, b = 1)
+```
+
+What happens if we don't use independent $U_1,U_2$? Run the code below to find out:
+
+```{r BM1, exercise = TRUE, exercise.eval = FALSE}
+# Use same uniform variable for log and trig
+X1 <- sqrt(-2*log(unif_vars)) * cos(2*pi*unif_vars)
+X2 <- sqrt(-2*log(unif_vars)) * sin(2*pi*unif_vars)
+
+qqnorm(c(X1, X2))
+abline(a = 0, b = 1)
+```
+
+### Beta random variables
+
+The Beta distribution is another example of a distribution whose quantile function doesn't have a closed form. But fortunately, there are a few transformations we can use to generate beta variates.
+
+First, we can use the fact that if $X\sim Gamma(\alpha, \theta)$ and $Y\sim Gamma(\beta, \theta)$ are independent gamma random variables with the same scale/rate parameter, then
+$$\frac{X}{X + Y} \sim Beta(\alpha, \beta).$$
+
+Luckily, we can generate random gamma variates in `R` using the `rgamma` function.
+
+```{r beta1, exercise = TRUE, exercise.eval = FALSE}
+# Change the parameters as you like
+alpha <- 2
+beta <- 5
+
+# Generate gammas (rate = 1 by default)
+X <- rgamma(n, alpha)
+Y <- rgamma(n, beta)
+
+betas <- X/(X + Y)
+
+# Look at histogram
+hist(betas, breaks = 20)
+```
+
+## Accept-reject method
+
+### Normal random variables
+
+The idea behind the accept-reject method is that we need to be able to find a *uniformly dominating* density $g$ that is "easier" to generate from. Intuitively, this means the density $g$ needs *heavier tails* than the density $f$. As a consequence, we cannot use the normal distribution to generate Cauchy variates; on the other hand, we can use the Cauchy distribution to generate normal variates!
+
+Recall the density of the Cauchy distribution:
+$$g(x) = \frac{1}{1 + x^2}.$$
+Therefore, if we take the ratio $f(x)/g(x)$, where $f(x)$ is the standard normal density, we get
+$$\frac{f(x)}{g(x)} = (1 + x^2)\exp\left(-\frac{1}{2}x^2\right).$$
+With a bit of calculus, we can check that the ratio is maximised at $x = \pm 1$, with value $2/\sqrt{e}$. Therefore, we can use $c=2/\sqrt{e} \approx 1.2131$ as our constant.
+
+```{r, echo = TRUE, eval = TRUE}
+# Set parameters----
+C <- 2/sqrt(exp(1)) # Constant
+n <- 1000 # Number of variates
+k <- 0 # counter for accepted
+j <- 0 # iterations
+norm_vars <- numeric(n) # Allocate memory
+
+# A while loop runs until condition no longer holds
+while (k < n) {
+  u <- runif(1)
+  j <- j + 1
+  x <- rcauchy(1) # random variate from g
+  if (u < (1 + x^2)*exp(-0.5*x^2)/C) {
+    k <- k + 1
+    norm_vars[k] <- x
+    }
+}
+
+# How many samples did we need?
+j
+
+# Look at QQ-plot
+qqnorm(norm_vars)
+abline(a = 0, b = 1)
+```
+
+This works as accepted! **Or did it?**
+
+If you pay attention to the ratio $f(x)/g(x)$ computed above, you will notice that we didn't *quite* use the normal density: we forgot the normalizing constant $1/\sqrt{2\pi}$! In Assignment 2, you will need to show why we still get a valid algorithm even if we omit the normalizing constant.
+
+The upshot is: **With the accept-reject algorithm, we can sample from a density** $f(x)$ **even if only know the density up to a constant.** This is especially important when $f(x)$ is a posterior density (see STAT 4150).
+
+### Discrete random variables
+
+Assume that we have a discrete random variable with support on $\{1, \ldots, 10\}$ and probability mass function
+$$f(j) = p_j = \begin{cases}0.06, \quad j=1, \ldots, 5\\ 0.13, \quad j = 6,7\\ 0.14,\quad j = 8\\0.15, \quad j = 9, 10. \end{cases}$$ 
+
+If we want to use a discrete uniform for $g$, the ratio is maximised when $j=9,10$, in which case
+$$\frac{f(j)}{g(j)} = \frac{0.15}{0.10} = 1.5.$$
+
+So we will take the constant $C=1.5$.
+
+Note that to generate from the discrete uniform, we can use the function `sample`:
+
+```{r discAR, echo = TRUE, eval = TRUE}
+probs <- c(6, 6, 6, 6, 6, 13, 13, 14, 15, 15)/100
+# But make sure the probabilities add up to 1!
+sum(probs) == 1
+
+# Set parameters
+C <- max(probs)*length(probs) # Constant
+n <- 1000 # Number of variates
+k <- 0 # counter for accepted
+j <- 0 # iterations
+disc_vars <- numeric(n) # Allocate memory
+
+# A while loop runs until condition no longer holds
+while (k < n) {
+  u <- runif(1)
+  j <- j + 1
+  x <- sample(1:length(probs), size = 1) # random variate from discrete uniform
+  if (u < length(probs)*probs[x]/C) {
+    k <- k + 1
+    disc_vars[k] <- x
+    }
+}
+
+# How many samples did we need?
+j
+
+# Look at empirical probs
+table(disc_vars)/n
+```
+
+## Multivariate distributions
+
+### Multivariate normal distribution
+
+We will finish our discussion about generating random variates with a brief introduction to multivariate distributions. This material is more advanced, and it can be skipped if you have not encountered multivariate distributions in previous statistics courses.
+
+Let $\mathbf{X} = (X_1, \ldots, X_p)$ be a random vector of length $p$. Let $\Sigma$ be a positive definite matrix (i.e. symmetric and all eigenvalues are strictly positive), and let $\mu\in\mathbb{R}^p$ be a fixed vector. We say $\mathbf{X}$ follows a **multivariate normal distribution** $N_p(\mu,\Sigma)$ if its density is given by
+$$f(\mathbf{x}) = \frac{1}{\sqrt{(2\pi)^p\lvert\Sigma\rvert}}\exp\left(-\frac{1}{2}(\mathbf{x} - \mu)^T\Sigma^{-1}(\mathbf{x} - \mu)\right).$$
+Here, $\Sigma^{-1}$ is the matrix inverse of $\Sigma$, and $\lvert\Sigma\rvert$ is its determinant. 
+
+We will use the following important property: if $\mathbf{Z}=(Z_1, \ldots, Z_p)$ is a multivariate standard normal (i.e. all $Z_j\sim N(0,1)$ are independent), then
+$$L \mathbf{Z} + \mu \sim N_p(\mu,LL^T).$$
+
+So if we can write $\Sigma=LL^T$, we can transform $\mathbf{Z}$ into $\mathbf{X}$. To do so, we will use the `chol` function in `R`:
+
+```{r echo = TRUE, eval = TRUE}
+# First, choose Sigma and mu
+Sigma <- matrix(c(1, 0.5, 0.5, 1), ncol = 2, nrow = 2)
+Sigma
+mu <- c(1, 2)
+
+# Next, compute factorization Sigma = LL^T
+L <- chol(Sigma)
+
+# Generate Z
+n <- 1000
+Z <- matrix(rnorm(2*n), ncol = 2, nrow = n)
+
+# Transform to X
+X <- Z %*% L + matrix(mu, ncol = 2, nrow = n,
+                      byrow = TRUE) # Default is FALSE
+
+# Check sample mean and covariance
+colMeans(X)
+cov(X)
+```
+
+Note that we wrote `matrix(mu, ncol = 2, nrow = n, byrow = TRUE)` so that we could create a matrix of the same size as `Z` and where each row is equal to `mu`. The argument `byrow = TRUE` is important: by default, `R` fills matrices by columns.
+
+Transformation methods are very useful when generating multivariate random variates. But other methods can be used:
+  - Accept-reject also works with multivariate densities!
+  - More generally, the whole field of Markov Chain Monte Carlo methods is focused on generating variates from multivariate distributions.
+
+## Exercises
+
+### Exercise 1
+
+When discussing the Box-Muller transformation, we saw the following two QQ-plots:
+```{r echo = FALSE, eval = TRUE}
+# We want 1000 samples
+n <- 1000
+unif_vars <- runif(1000)
+# Use first half for log, second half for trig function
+U1 <- unif_vars[1:500]
+U2 <- unif_vars[501:n]
+
+X1 <- sqrt(-2*log(U1)) * cos(2*pi*U2)
+X2 <- sqrt(-2*log(U1)) * sin(2*pi*U2)
+
+# Look at QQ-plot
+par(mfrow = c(1, 2))
+qqnorm(c(X1, X2))
+abline(a = 0, b = 1)
+
+# Use same uniform variable for log and trig
+X1 <- sqrt(-2*log(unif_vars)) * cos(2*pi*unif_vars)
+X2 <- sqrt(-2*log(unif_vars)) * sin(2*pi*unif_vars)
+
+qqnorm(c(X1, X2))
+abline(a = 0, b = 1)
+```
+
+Answer the following question:
+
+```{r generateRVex1, echo = FALSE}
+question("Which plot correspond to a valid algorithm for generating standard normal variates?",
+         answer("The plot on the left.", correct = TRUE),
+         answer("The plot on the right.", message = "This one was generated by reusing the same uniform variates, not independent ones."),
+         allow_retry = TRUE
+)
+```
+
+### Exercise 2
+
+The following accept-reject algorithm is using the standard normal distribution to generate random Cauchy variates:
+
+```{r echo = TRUE, eval = TRUE}
+# Set parameters----
+C <- sqrt(exp(1))/2 # Constant
+n <- 1000 # Number of variates
+k <- 0 # counter for accepted
+j <- 0 # iterations
+cauchy_vars <- numeric(n) # Allocate memory
+
+# A while loop runs until condition no longer holds
+while (k < n) {
+  u <- runif(1)
+  j <- j + 1
+  x <- rnorm(1) # random variate from g
+  if (u < C/(1 + x^2)*exp(-0.5*x^2)) {
+    k <- k + 1
+    cauchy_vars[k] <- x
+    }
+}
+
+# Look at QQ-plot
+qqplot(qcauchy(ppoints(n)),
+       cauchy_vars, 
+       xlab = "Sample",
+       ylab = "Theoretical")
+abline(a = 0, b = 1)
+```
+
+Answer the following question:
+
+```{r generateRVex2, echo = FALSE}
+question("Why is the algorithm failing?",
+         answer("Trick question: the algorithm worked just fine."),
+         answer("The constant $C$ is wrong.", message = "The constant isn't wrong, inasmuch as there is no valid constant."),
+         answer("The tails of the Cauchy distribution are heavier than that of the standard normal.", correct = TRUE),
+         allow_retry = TRUE
+)
+```

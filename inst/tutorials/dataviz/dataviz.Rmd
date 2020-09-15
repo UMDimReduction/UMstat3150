@@ -337,7 +337,7 @@ gridExtra::grid.arrange(gg1, gg2, ncol = 2)
 
 You're interested in determining which states have the highest and lowest rates.
 
-```{r logicals1, echo = FALSE}
+```{r datavizex1, echo = FALSE}
 question("Which plot is easier to read?",
          answer("They provide the same information, so they are both equally as good."),
          answer("The plot on the right is better because it orders the states alphabetically."),
@@ -363,7 +363,7 @@ murders %>%
 
 You show this plot to a friend, who replies "I would move to the western region".
 
-```{r logicals2, echo = FALSE}
+```{r datavizex2, echo = FALSE}
 question("What is the main problem with your friend's interpretation?",
          answer("The categories are ordered alphabetically."),
          answer("The graph does not show standard errors."),
