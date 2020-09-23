@@ -1,0 +1,312 @@
+---
+title: "Monte Carlo Integration"
+output: 
+  learnr::tutorial:
+    progressive: true
+    allow_skip: true
+runtime: shiny_prerendered
+description: >
+  Learn basic principles of Monte Carlo integration.
+---
+
+```{r setup, include=FALSE}
+library(learnr)
+knitr::opts_chunk$set(echo = FALSE)
+```
+
+## Welcome
+
+This is a tutorial on Monte Carlo integration. It was created for the course STAT3150--Statistical Computing at the University of Manitoba.
+
+###  
+
+In this tutorial, we continue our discussion of Monte Carlo integration. Specifically, we will look at
+
+  * integration on unbounded intervals
+  * comparison with "hit-or-miss" approach
+  * control variates and linear regression
+  
+## Integrals over unbounded intervals
+
+### Normal CDF
+
+There are various strategies for estimating integrals over unbounded integrals. We saw a few examples in class, where we had to sample from an exponential distribution. We will also see further examples in the next module on importance sampling.
+
+In this tutorial, we will look at the following example: the CDF of the standard normal distribution. It is defined as follows:
+
+$$\Phi(x) = \int_{-\infty}^x \frac{1}{\sqrt{2\pi}}\exp\left(-\frac{t^2}{2}\right)dt.$$
+
+As you probably know, there is no closed form for this expression. **How can we estimate it?**
+
+One important observation we can make is the following:
+
+\begin{align*}
+\int_{-\infty}^x \frac{1}{\sqrt{2\pi}}\exp\left(-\frac{t^2}{2}\right)dt &= \Phi(0) + \int_{0}^x \frac{1}{\sqrt{2\pi}}\exp\left(-\frac{t^2}{2}\right)dt\\
+  &= 0.5 + \int_{0}^x \frac{1}{\sqrt{2\pi}}\exp\left(-\frac{t^2}{2}\right)dt.
+\end{align*}
+
+The last equality follows from the *symmetry* of the normal density around $x=0$, and the fact that the integral over the whole range $(-\infty,\infty)$ is 1. 
+
+We have now re-expressed our unbounded integral in terms of a *bounded* integral!
+
+We will apply this idea to estimate the value of $\Phi(1.64)$. Fix the code below to make sure the estimate we get is correct.
+
+```{r unbd1, exercise = TRUE, exercise.eval = FALSE}
+# Choose an upper bound x
+ub <- 1.64
+# Sample size
+n <- 1000
+# Sample uniformly on (0, ub)
+unif_vars <- runif(n, 0, max = ub)
+
+# Evaluate at f(x) and take average
+mean(exp(-0.5*unif_vars^2)/sqrt(2*pi))
+
+# Expected result
+pnorm(ub)
+```
+
+```{r unbd1-solution}
+# Choose an upper bound x
+ub <- 1.64
+# Sample size
+n <- 1000
+# Sample uniformly on (0, ub)
+unif_vars <- runif(n, 0, max = ub)
+
+# Multiply by length of integration interval 
+# and add 0.5 for integral over negative values
+ub*mean(exp(-0.5*unif_vars^2)/sqrt(2*pi)) + 0.5
+
+# Expected result
+pnorm(ub)
+```
+
+###
+
+We saw how we can estimate the integral $\Phi(x)$ for a single $x$, but what if we want for **all values** of $x>0$. Do we need to go through the algorithm every single time?
+
+Fortunately, the answer is **no**. And the solution is to use a substitution that will transform the bounds so that they no longer depend on $x$. In that way, we'll be able to reuse the sample of uniform variates!
+
+Set $y = t/x$. We then have that $dt = xdy$, and we get
+
+$$\int_{0}^x\exp\left(-\frac{t^2}{2}\right)dt = \int_{0}^1 \exp\left(-\frac{(xy)^2}{2}\right)xdy.$$
+
+In other words, we are trying to estimate $E\left(x\exp\left(-\frac{(xY)^2}{2}\right)\right)$ where $Y\sim U(0,1)$. Once we have generated a sample of random uniform variates, we can reuse it for all values of $x>0$.
+
+```{r eval = TRUE, echo = TRUE}
+# Sample size
+n <- 1000
+# Sample uniformly on (0, 1)
+unif_vars <- runif(n, 0)
+
+# Let's create a function
+gfun <- function(x) {
+  integrand <- x*exp(-0.5*x^2*unif_vars^2)
+  phix <- mean(integrand/sqrt(2*pi)) + 0.5
+  return(phix)
+}
+
+gfun(x = 1.64)
+gfun(x = 0.5)
+
+# Compared to:
+pnorm(q = 1.64)
+pnorm(q = 0.5)
+```
+
+## Alternative approach
+
+There is a different approach to estimating the CDF of any distribution, as long as we can generate random variates. The idea is as follows: assume we want to estimate $F(x) = P(X \leq x)$. Sample $n$ variates from $F$ and count the proportion of samples that are at most $x$. Easy peasy!
+
+Run the following code:
+
+```{r unbd2, exercise = TRUE, exercise.eval = FALSE}
+# Choose an upper bound x
+ub <- 1.64
+# Sample size
+n <- 1000
+# Sample from standard normal
+norm_vars <- rnorm(n)
+
+# Compute proportion
+mean(norm_vars < ub)
+
+# Expected result
+pnorm(ub)
+```
+
+This approach, which we could call "hit-or-miss", is actually a form of Monte Carlo integration! If we let $I(\cdot)$ be the indicator function:
+$$I(z \leq x) = \begin{cases} 1 & \mbox{if } z \leq x\\ 0 & \mbox{otherwise}\end{cases}$$
+
+Then we can write
+$$\Phi(x) = P(X \leq x) = E(I(X \leq x)).$$
+
+### 
+
+**Which approach is best?** The hit-or-miss approach often has a larger standard error than other Monte Carlo integration approaches. Recall from class that the variance of the Monte Carlo estimate is given by
+$$ \mathrm{Var}(I(X \leq x))/n,$$
+where $n$ is the number of samples. But we can check that
+$$\mathrm{Var}(I(X \leq x)) = \Phi(x) (1 - \Phi(x)).$$
+
+Let's estimate the standard errors for both approaches:
+
+```{r eval = TRUE, echo = TRUE}
+# Choose an upper bound x
+ub <- 1.64
+# Sample size
+n <- 1000
+
+# 1. MC integration with uniform
+unif_vars <- runif(n, 0, max = ub)
+theta1_hat <- ub*mean(exp(-0.5*unif_vars^2)/sqrt(2*pi)) + 0.5
+sd1_hat <- ub*sd(exp(-0.5*unif_vars^2)/sqrt(2*pi))
+
+# 2. Hit-or-miss approach
+norm_vars <- rnorm(n)
+theta2_hat <- mean(norm_vars < ub)
+sd2_hat <- sqrt(theta2_hat*(1 - theta2_hat))
+
+# Compare both approaches
+c(theta1_hat, sd1_hat/sqrt(n))
+c(theta2_hat, sd2_hat/sqrt(n))
+```
+
+As we can see, the standard errors are about the same. Generally speaking, the first approach will be more accurate near the median of the distribution, while the hit-or-miss approach will be more accurate in the tails. 
+
+## Control variates and linear regression
+
+One of the methods for reducing the variance that we discussed in class is the method of **control variates**. Recall the setup: 
+
+  - we want to estimate $\theta = E(g(X))$;
+  - we know the value $\mu = E(h(X))$ for some function $h$;
+  - we define $\hat{\theta}_c = g(X) + c(h(X) - \mu)$;
+  - we look for the constant $c$ that minimizes the variance.
+  
+###
+
+It turns out that we can estimate $c$ using *simple linear regression*. Recall the setup: let $Z,Y$ be random variables, and assume we can write
+$$Y = \beta_0 + \beta_1 Z + \epsilon,$$
+where $E(\epsilon) = 0$. The least square estimate of the slope is given by
+$$ \hat{\beta}_1 = \frac{\widehat{\mathrm{Cov}(Y, Z)}}{\widehat{\mathrm{Var}(Z)}}.$$
+If we take $Y = g(X)$ and $Z = h(X)$, we get
+$$\hat{\beta}_1 = -c^*.$$
+
+In other words, we can use linear regression to estimate $c^*$!
+
+### Linear regression in `R`
+
+We can perform linear regression in `R` using the `lm` function. Let's look at an example:
+
+```{r echo = TRUE, eval = TRUE}
+X <- rnorm(100)
+Y <- 0.5 + 1*X + rnorm(100)
+
+model <- lm(Y ~ X)
+
+# Look at coefficient estimates
+coef(model)
+
+# Look at root mean squared error
+summary(model)$sigma
+
+# Predict value at X = 1
+predict(model, data.frame(X = 1))
+```
+
+We will use this connection and revisit our example from class. Run the code below:
+
+```{r lm1, exercise = TRUE, exercise.eval = FALSE}
+n <- 1000
+exp_vars <- rexp(n)
+g_est <- 1/(1 + exp_vars)
+h_est <- 1 + exp_vars
+
+model <- lm(g_est ~ h_est)
+
+(c_star <- -model$coef[2])
+
+# theta hat is the predicted value at h(X) = mu
+thetac_hat <- predict(model, 
+                      data.frame(h_est = 2))
+sigmac_hat <- summary(model)$sigma
+c(thetac_hat, sigmac_hat/sqrt(n))
+```
+
+If you look back at your notes, you can see that we get essentially the same answer.
+
+## Exercises
+
+### Exercise 1
+
+Recall the density of the $t$-distribution:
+$$f(x\mid \nu) = \frac{\Gamma\left(\frac{\nu + 1}{2}\right)}{\sqrt{\mu\pi}\Gamma\left(\frac{\nu}{2}\right)}\left(1 + \frac{x^2}{\nu}\right)^{-\frac{\nu + 1}{2}}.$$
+
+You don't need to code this! You can use the function `dt`, e.g. $f(2\mid 4)$ is given by `dt(2, df = 4)`.
+
+Complete the code below to estimate the CDF of the $t$ distribution on 4 degrees of freedom.
+
+```{r mcint1, exercise = TRUE, exercise.eval = FALSE}
+# Fix degrees of freedom
+df <- 4
+# Choose an upper bound x
+ub <- 1.64
+# Sample size
+n <- 1000
+
+# Write your code below----
+
+# Expected result
+pt(ub, df = df)
+```
+
+```{r mcint1-solution}
+# Fix degrees of freedom
+df <- 4
+# Choose an upper bound x
+ub <- 1.64
+# Sample size
+n <- 1000
+# Sample uniformly on (0, ub)
+unif_vars <- runif(n, 0, max = ub)
+
+# Multiply by length of integration interval 
+# and add 0.5 for integral over negative values
+ub*mean(dt(unif_vars, df = df)) + 0.5
+
+# Expected result
+pt(ub, df = df)
+```
+
+### Exercise 2
+
+For the second exercise, we will use the hit-or-miss approach. Complete the code below to estimate the CDF of the $t$ distribution on 4 degrees of freedom.
+
+```{r mcint2, exercise = TRUE, exercise.eval = FALSE}
+# Fix degrees of freedom
+df <- 4
+# Choose an upper bound x
+ub <- 1.64
+# Sample size
+n <- 1000
+
+# Write your code below----
+
+# Expected result
+pt(ub, df = df)
+```
+
+```{r mcint2-solution}
+# Fix degrees of freedom
+df <- 4
+# Choose an upper bound x
+ub <- 1.64
+# Sample size
+n <- 1000
+# Sample from t distribution
+t_vars <- rt(n, df = df)
+mean(t_vars < ub)
+
+# Expected result
+pt(ub, df = df)
+```
