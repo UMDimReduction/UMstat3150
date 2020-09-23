@@ -66,7 +66,7 @@ df <- data.frame(
 )
 ```
 
-```{r pie2, exercise = TRUE, exercise.eval = TRUE}
+```{r pie2, exercise = TRUE, exercise.eval = TRUE, exercise.setp = "pie1"}
 # Can trick ggplot to make a pie chart:
 # Make a bar chart in polar coordinates
 ggplot(df, aes(x = "", y = Y2000, fill = Browser)) + 
@@ -83,7 +83,7 @@ df_tall <- gather(df, "Year", "Percent",
                   Y2000, Y2015)
 ```
 
-```{r pie3-2, exercise = TRUE, exercise.eval = TRUE}
+```{r pie3-2, exercise = TRUE, exercise.eval = TRUE, exercise.setp = "pie3"}
 ggplot(df_tall, aes(x = "", y = Percent, fill = Browser)) + 
   geom_bar(stat = "identity") + 
   coord_polar("y", start = 0) +
@@ -94,7 +94,7 @@ Can you tell if the preference ranking changed between 2000 and 2015? **Pie char
 
 In this case, a bar chart can more easily show us changes:
 
-```{r pie4, exercise = TRUE, exercise.eval = TRUE}
+```{r pie4, exercise = TRUE, exercise.eval = TRUE, exercise.setp = "pie3"}
 ggplot(df_tall, aes(x = Browser, y = Percent)) + 
   geom_bar(stat = "identity") + 
   facet_grid(~Year)
@@ -112,7 +112,7 @@ knitr::include_graphics("images/cue_hierarchy.jpg")
 
 Using the notes and the code above, instead of using `facet_grid`, can you make a bar chart where preference percentages for the same browser are next to one another and of different colour?
 
-```{r pie5, exercise = TRUE}
+```{r pie5, exercise = TRUE, exercise.setp = "pie3"}
 
 ```
 
@@ -132,12 +132,12 @@ ggplot(df_tall, aes(x = Browser, y = Percent,
 When constructing the barplots above, we made an important assumption: the length of the bar is proportional to the quantity being displayed. This assumption is important, because it was what allows to compare across browsers and years. Also, it allows us to assess the *relative* difference between them. 
 
 When we don't include zero in a barplot, the lengths are no longer proportional to the quantities. Let's look at an example:
-```{r, eval=TRUE}
+```{r zero1, eval=TRUE}
 # Remove Opera from list of browsers
 df_tall2 <- filter(df_tall, Browser != "Opera")
 ```
 
-```{r zero1, exercise = TRUE, exercise.eval = TRUE}
+```{r zero2, exercise = TRUE, exercise.eval = TRUE, exercise.setp = "zero1"}
 # Restrict the range
 ggplot(df_tall2, aes(x = Browser, y = Percent)) + 
   geom_bar(stat = "identity") + 
@@ -149,7 +149,7 @@ As we can see, differences of a few percentage points are exaggerated when we re
 
 *When should we include zero?* What is important to remember here is that for barplots, the visual cue we use is **length**. When the visual cue is **position**, then excluding zero does not distort the quantity of interest. Here's an example:
 
-```{r zero2, exercise = TRUE, exercise.eval = TRUE}
+```{r zero3, exercise = TRUE, exercise.eval = TRUE}
 gapminder %>% 
   filter(year == 2012) %>% # Only keep data from 2012
   ggplot(aes(continent, life_expectancy)) +
@@ -197,12 +197,12 @@ As we can see, comparisons are much harder: twice the fertility means a point th
 As you may be aware, `R` will automatically order strings in alphabetical order. But really, when is alphabetical order the best to order information? Wouldn't you rather order Canadian provinces from West to East?
 
 Reordering categories according to a more meaningful criterion can often improve your data visualization by making it easier to compare. Let's look at an example using the `murders` dataset. 
-```{r eval = TRUE}
+```{r reorder1, eval = TRUE}
 data_murders <- murders %>% 
   mutate(murder_rate = total / population * 100000) # Compute rate
 ```
 
-```{r reorder1, exercise = TRUE, exercise.eval = TRUE}
+```{r reorder2, exercise = TRUE, exercise.eval = TRUE, exercise.setp = "reorder1"}
 data_murders %>%
   ggplot(aes(state, murder_rate)) +
   geom_bar(stat = "identity") +
@@ -215,7 +215,7 @@ As we expected, the ordering is alphabetical (from bottom to top). We can easily
 
 Instead, we can reorder the states according to the rate themselves. For this, we can use the function `reorder` to arrange US states according to murder rate:
 
-```{r reorder2, exercise = TRUE, exercise.eval = TRUE}
+```{r reorder3, exercise = TRUE, exercise.eval = TRUE, exercise.setp = "reorder1"}
 data_murders %>%
   mutate(state = reorder(state, murder_rate)) %>% # Reorder state by murder
   ggplot(aes(state, murder_rate)) +
@@ -229,11 +229,11 @@ data_murders %>%
 
 The states are grouped in geographical regions. Can you update the bar chart so that the bars are coloured according to the region of the state? Can you identify a correlation pattern?
 
-```{r reorder3, exercise = TRUE}
-
+```{r reorder4, exercise = TRUE, exercise.setp = "reorder1"}
+data_murders
 ```
 
-```{r reorder3-solution}
+```{r reorder4-solution}
 data_murders %>%
   mutate(state = reorder(state, murder_rate)) %>% 
   ggplot(aes(state, murder_rate,
@@ -285,7 +285,7 @@ gapminder %>%
 
 Now, we can clearly see that Europe has a higher average life expectancy. 
 
-When deciding how to arrange your visual cues on the graph, try to find the arragement that makes the **important comparisons** as clear as possible.
+When deciding how to arrange your visual cues on the graph, try to find the arrangement that makes the **important comparisons** as clear as possible.
 
 #### Exercise 
 
@@ -310,7 +310,7 @@ gapminder %>%
 
 Look at the following two plots of 1928 rates of measles across the US:
 
-```{r echo = FALSE, eval = TRUE}
+```{r datavizex1-setup, echo = FALSE, eval = TRUE}
 gg1 <- us_contagious_diseases %>% 
   filter(disease == "Measles", year == 1928,
          !state %in% c("Hawaii", "Alaska")) %>% 

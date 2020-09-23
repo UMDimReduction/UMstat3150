@@ -106,7 +106,7 @@ Recall the density of the Cauchy distribution:
 $$g(x) = \frac{1}{1 + x^2}.$$
 Therefore, if we take the ratio $f(x)/g(x)$, where $f(x)$ is the standard normal density, we get
 $$\frac{f(x)}{g(x)} = (1 + x^2)\exp\left(-\frac{1}{2}x^2\right).$$
-With a bit of calculus, we can check that the ratio is maximised at $x = \pm 1$, with value $2/\sqrt{e}$. Therefore, we can use $c=2/\sqrt{e} \approx 1.2131$ as our constant.
+With a bit of calculus, we can check that the ratio is maximized at $x = \pm 1$, with value $2/\sqrt{e}$. Therefore, we can use $c=2/\sqrt{e} \approx 1.2131$ as our constant.
 
 ```{r, echo = TRUE, eval = TRUE}
 # Set parameters----
@@ -146,7 +146,7 @@ The upshot is: **With the accept-reject algorithm, we can sample from a density*
 Assume that we have a discrete random variable with support on $\{1, \ldots, 10\}$ and probability mass function
 $$f(j) = p_j = \begin{cases}0.06, \quad j=1, \ldots, 5\\ 0.13, \quad j = 6,7\\ 0.14,\quad j = 8\\0.15, \quad j = 9, 10. \end{cases}$$ 
 
-If we want to use a discrete uniform for $g$, the ratio is maximised when $j=9,10$, in which case
+If we want to use a discrete uniform for $g$, the ratio is maximized when $j=9,10$, in which case
 $$\frac{f(j)}{g(j)} = \frac{0.15}{0.10} = 1.5.$$
 
 So we will take the constant $C=1.5$.
