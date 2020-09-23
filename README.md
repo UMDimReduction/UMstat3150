@@ -17,3 +17,17 @@ learnr::run_tutorial("test", package = "UMstat3150")
 
 The first argument is the name of the tutorial.
 
+## List of tutorials
+
+These are the planned tutorials:
+
+  1. `dataviz`: Data visualization
+  2. `generateRV`: Generating random variables
+  3. `MCintegration`: Monte Carlo integration
+  4. `importance`: Importance sampling
+  5. `MCinference`: Monte Carlo methods in inference
+  6. `bootstrap`: Bootstrap and Jackknife
+  7. `resampling`: Resampling applications
+  8. `permutation`: Permutation tests
+  9. `numerical`: Numerical methods
+  10. `optimisation`: Introduction to optimisation
