@@ -17,6 +17,20 @@ library(dslabs)
 
 tutorial_options(exercise.timelimit = 60)
 knitr::opts_chunk$set(error = TRUE)
+
+# Exercise setup----
+# Browser preference
+df <- data.frame(
+  "Browser" = c("Opera", "Safari", "Firefox", "Chrome", "IE"),
+  "Y2000" = c(3, 21, 23, 26, 28),
+  "Y2015" = c(2, 22, 21, 29, 27)
+)
+df_tall <- gather(df, "Year", "Percent", 
+                  Y2000, Y2015)
+df_tall2 <- filter(df_tall, Browser != "Opera")
+
+data_murders <- murders %>% 
+  mutate(murder_rate = total / population * 100000) # Compute rate
 ```
 
 ## Welcome
@@ -66,7 +80,7 @@ df <- data.frame(
 )
 ```
 
-```{r pie2, exercise = TRUE, exercise.eval = TRUE, exercise.setp = "pie1"}
+```{r pie2, exercise = TRUE, exercise.eval = TRUE}
 # Can trick ggplot to make a pie chart:
 # Make a bar chart in polar coordinates
 ggplot(df, aes(x = "", y = Y2000, fill = Browser)) + 
@@ -83,7 +97,7 @@ df_tall <- gather(df, "Year", "Percent",
                   Y2000, Y2015)
 ```
 
-```{r pie3-2, exercise = TRUE, exercise.eval = TRUE, exercise.setp = "pie3"}
+```{r pie3-2, exercise = TRUE, exercise.eval = TRUE}
 ggplot(df_tall, aes(x = "", y = Percent, fill = Browser)) + 
   geom_bar(stat = "identity") + 
   coord_polar("y", start = 0) +
@@ -94,7 +108,7 @@ Can you tell if the preference ranking changed between 2000 and 2015? **Pie char
 
 In this case, a bar chart can more easily show us changes:
 
-```{r pie4, exercise = TRUE, exercise.eval = TRUE, exercise.setp = "pie3"}
+```{r pie4, exercise = TRUE, exercise.eval = TRUE}
 ggplot(df_tall, aes(x = Browser, y = Percent)) + 
   geom_bar(stat = "identity") + 
   facet_grid(~Year)
@@ -112,7 +126,7 @@ knitr::include_graphics("images/cue_hierarchy.jpg")
 
 Using the notes and the code above, instead of using `facet_grid`, can you make a bar chart where preference percentages for the same browser are next to one another and of different colour?
 
-```{r pie5, exercise = TRUE, exercise.setp = "pie3"}
+```{r pie5, exercise = TRUE}
 
 ```
 
@@ -137,7 +151,7 @@ When we don't include zero in a barplot, the lengths are no longer proportional 
 df_tall2 <- filter(df_tall, Browser != "Opera")
 ```
 
-```{r zero2, exercise = TRUE, exercise.eval = TRUE, exercise.setp = "zero1"}
+```{r zero2, exercise = TRUE, exercise.eval = TRUE}
 # Restrict the range
 ggplot(df_tall2, aes(x = Browser, y = Percent)) + 
   geom_bar(stat = "identity") + 
@@ -202,7 +216,7 @@ data_murders <- murders %>%
   mutate(murder_rate = total / population * 100000) # Compute rate
 ```
 
-```{r reorder2, exercise = TRUE, exercise.eval = TRUE, exercise.setp = "reorder1"}
+```{r reorder2, exercise = TRUE, exercise.eval = TRUE}
 data_murders %>%
   ggplot(aes(state, murder_rate)) +
   geom_bar(stat = "identity") +
@@ -215,7 +229,7 @@ As we expected, the ordering is alphabetical (from bottom to top). We can easily
 
 Instead, we can reorder the states according to the rate themselves. For this, we can use the function `reorder` to arrange US states according to murder rate:
 
-```{r reorder3, exercise = TRUE, exercise.eval = TRUE, exercise.setp = "reorder1"}
+```{r reorder3, exercise = TRUE, exercise.eval = TRUE}
 data_murders %>%
   mutate(state = reorder(state, murder_rate)) %>% # Reorder state by murder
   ggplot(aes(state, murder_rate)) +
@@ -229,7 +243,7 @@ data_murders %>%
 
 The states are grouped in geographical regions. Can you update the bar chart so that the bars are coloured according to the region of the state? Can you identify a correlation pattern?
 
-```{r reorder4, exercise = TRUE, exercise.setp = "reorder1"}
+```{r reorder4, exercise = TRUE}
 data_murders
 ```
 

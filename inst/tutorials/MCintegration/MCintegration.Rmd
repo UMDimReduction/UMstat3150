@@ -117,7 +117,7 @@ pnorm(q = 0.5)
 
 ## Alternative approach
 
-There is a different approach to estimating the CDF of any distribution, as long as we can generate random variates. The idea is as follows: assume we want to estimate $F(x) = P(X \leq x)$. Sample $n$ variates from $F$ and count the proportion of samples that are at most $x$. Easy peasy!
+There is a different approach to estimating the CDF of any distribution, as long as we can generate random variates from it. The idea is as follows: assume we want to estimate $F(x) = P(X \leq x)$. Sample $n$ variates from $F$ and count the proportion of samples that are at most $x$. Easy peasy!
 
 Run the following code:
 
@@ -140,14 +140,14 @@ This approach, which we could call "hit-or-miss", is actually a form of Monte Ca
 $$I(z \leq x) = \begin{cases} 1 & \mbox{if } z \leq x\\ 0 & \mbox{otherwise}\end{cases}$$
 
 Then we can write
-$$\Phi(x) = P(X \leq x) = E(I(X \leq x)).$$
+$$F(x) = P(X \leq x) = E(I(X \leq x)).$$
 
 ### 
 
 **Which approach is best?** The hit-or-miss approach often has a larger standard error than other Monte Carlo integration approaches. Recall from class that the variance of the Monte Carlo estimate is given by
 $$ \mathrm{Var}(I(X \leq x))/n,$$
 where $n$ is the number of samples. But we can check that
-$$\mathrm{Var}(I(X \leq x)) = \Phi(x) (1 - \Phi(x)).$$
+$$\mathrm{Var}(I(X \leq x)) = F(x) (1 - F(x)).$$
 
 Let's estimate the standard errors for both approaches:
 

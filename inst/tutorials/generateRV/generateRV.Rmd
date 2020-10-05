@@ -137,7 +137,7 @@ abline(a = 0, b = 1)
 
 This works as accepted! **Or did it?**
 
-If you pay attention to the ratio $f(x)/g(x)$ computed above, you will notice that we didn't *quite* use the normal density: we forgot the normalizing constant $1/\sqrt{2\pi}$! In Assignment 2, you will need to show why we still get a valid algorithm even if we omit the normalizing constant.
+If you pay attention to the ratio $f(x)/g(x)$ computed above, you will notice that we didn't *quite* use the normal density: we forgot the normalizing constant $1/\sqrt{2\pi}$! As an exercise, you can show why we still get a valid algorithm even if we omit the normalizing constant.
 
 The upshot is: **With the accept-reject algorithm, we can sample from a density** $f(x)$ **even if only know the density up to a constant.** This is especially important when $f(x)$ is a posterior density (see STAT 4150).
 
