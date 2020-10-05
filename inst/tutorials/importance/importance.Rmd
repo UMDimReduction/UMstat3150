@@ -1,0 +1,271 @@
+---
+title: "Importance Sampling"
+output: 
+  learnr::tutorial:
+    progressive: true
+    allow_skip: true
+runtime: shiny_prerendered
+description: >
+  Learn how importance sampling can be used to estimate integrals.
+---
+
+```{r setup, include=FALSE}
+library(learnr)
+knitr::opts_chunk$set(echo = FALSE)
+# Setup for exercise chunks
+phi <- function(x) {
+  2*exp(-0.5*(x - 1)^2)/sqrt(2*pi)
+}
+```
+
+## Welcome
+
+This is a tutorial on Importance Sampling. It was created for the course STAT3150--Statistical Computing at the University of Manitoba.
+
+###  
+
+In this tutorial, we continue our discussion of Monte Carlo integration and Importance Sampling. Specifically, we will look at
+
+  * more examples of importance sampling
+  * stratified Monte Carlo integration
+  
+## Further examples
+
+###
+
+With importance sampling, recall that the goal is still to estimate integrals of the form
+$$\theta = \int_A g(x) f(x)dx,$$
+where $f$ is density function. To decrease variance, we want to find an importance function $\phi$ (which is also a density function) such that
+$$\phi(x) \approx \lvert g(x)\rvert f(x).$$
+
+In the next examples, we will look at the following integral:
+$$\theta = \int_1^\infty \frac{x^2}{\sqrt{2\pi}}e^{-x^2/2}dx.$$
+
+First, we recognize the standard normal density $f(x) = \frac{1}{\sqrt{2\pi}}e^{-x^2/2}$. Can we use basic Monte Carlo integration? Can you spot the problem in the code below?
+
+```{r extra1, exercise = TRUE, exercise.eval = FALSE}
+n <- 3150
+norm_vars <- rnorm(n)
+mean(norm_vars^2)
+```
+
+<div id="extra1-hint">
+**Hint:** What are the bounds of integration?
+</div>
+
+###
+
+The problem with the algorithm above is that it estimates 
+$$E(X^2) = \int_{-\infty}^\infty \frac{x^2}{\sqrt{2\pi}}e^{-x^2/2}dx,$$
+which is not equal to $\theta$.
+
+The solution: only use samples from `norm_vars` that are greater than 1. Run the code below, and compute the standard error of this estimate:
+
+```{r extra2, exercise = TRUE, exercise.eval = FALSE}
+n <- 3150
+norm_vars <- rnorm(n)
+mean((norm_vars > 1)*norm_vars^2)
+```
+
+```{r extra2-solution}
+n <- 3150
+norm_vars <- rnorm(n)
+mean((norm_vars > 1)*norm_vars^2)
+# Standard error
+sd((norm_vars > 1)*norm_vars^2)/sqrt(n)
+```
+
+### 
+
+We have seen before how such solution are "wasting" samples, which leads to larger variances and lower accuracy. *Can we find a better algorithm?*
+
+We want to find a density $\phi$ that looks like the standard normal density, but with support on $(1,\infty)$. We can achieve this in two stages. If $Z$ is a standard normal variable:
+
+  1. $\lvert Z \rvert$ has support on $(0,\infty)$.
+  2. $X = \lvert Z \rvert + 1$ has support on $(1,\infty)$.
+  
+The support of $X$ matches the integral in $\theta$, and the tails are similar to a standard normal. As a bonus, we can easily sample from this distribution by using the transformations above:
+
+```{r echo = TRUE, eval = TRUE}
+n <- 1000
+zvars <- rnorm(n)
+# Take absolute value and add 1
+xvars <- abs(zvars) + 1
+
+hist(xvars, 20)
+```
+
+###
+
+How can we find the density $\phi(x)$? First, because of the symmetry of the standard normal density, we know that 
+$$\int_0^\infty \frac{1}{\sqrt{2\pi}}e^{-x^2/2} dx = 0.5,$$
+and therefore the density of $\lvert Z \rvert$ is given by
+$$\frac{2}{\sqrt{2\pi}}e^{-x^2/2}.$$
+
+This is known as the *folded normal distribution*.
+
+Next, to get the density $\phi(x)$ of $X=\lvert Z \rvert+1$, we need to replace $x$ by $x-1$ in the density of the folded normal:
+$$\phi(x) = \frac{2}{\sqrt{2\pi}}e^{-(x-1)^2/2}.$$
+
+###
+
+Now that we have the density $\phi$, we can use importance sampling to estimate $\theta$. 
+
+First, we will create a function to simplify the code:
+
+```{r, eval = TRUE, echo = TRUE}
+phi <- function(x) {
+  2*exp(-0.5*(x - 1)^2)/sqrt(2*pi)
+}
+```
+
+Next, run the code below:
+
+```{r extra3, exercise = TRUE, exercise.eval = FALSE}
+n <- 3150
+# Generate from our importance density
+norm_vars <- rnorm(n)
+phi_vars <- abs(norm_vars) + 1
+# Create ratio g(x)f(x)/phi(x)
+samples <- phi_vars^2*dnorm(phi_vars)/phi(phi_vars)
+# Compute estimate
+mean(samples)
+# Standard error
+sd(samples)/sqrt(n)
+```
+
+This second approach is about 25 times more efficient!
+
+###
+
+If we plot the ratio $\lvert g(x) \rvert f(x)/\phi(x)$, we can see that we are still far from a constant function:
+
+```{r}
+xvars <- seq(1, 10, length.out = 100)
+plot(xvars, xvars^2*dnorm(xvars)/phi(xvars), 
+     type = "l", xlab = "X", ylab="g(x)f(x)/phi(x)")
+```
+
+This means that there is still plenty of room for improvement. As an exercise, you can try finding another density $\phi(x)$ that gives a smaller standard error.
+
+## Stratified Monte Carlo integration
+
+### 
+
+To increase accuracy, we can also use a useful property of the integral: suppose we are interested in
+$$\int_a^b g(x)dx.$$
+If we have $K+1$ real numbers $a_0\leq\cdots\leq a_K$ such that $a_0 = a$ and $a_K = b$, then we have the following equality:
+$$\int_a^b g(x)dx = \sum_{k=1}^K \int_{a_{k-1}}^{a_k} g(x)dx.$$
+
+In the context of Monte Carlo integration, this means that if we estimate each piece $\theta_k = \int_{a_{k-1}}^{a_k} g(x)dx$ separately, we can add up our estimates and get an estimate of the full integral $\theta = \int_a^b g(x)dx$.
+
+**Why does it matter?** On smaller intervals, the function $g(x)$ is closer to a constant, which means that our Monte Carlo estimate using a uniform variable are more accurate. In other words, this is yet again a way to reduce variance!
+
+###
+
+Let's revisit an example from class:
+$$\int_{0}^1 \frac{e^{-x}}{1 + x^2}dx.$$
+
+In the code box below, estimate the integral using uniform variates, and compute the standard error. In what follows, we will compare stratified sampling with this baseline.
+
+```{r strat1, exercise = TRUE, exercise.eval = FALSE}
+n <- 1000
+# Add your code below
+```
+
+```{r strat1-solution}
+n <- 1000
+unif_vars <- runif(n)
+mean(exp(-unif_vars)/(1 + unif_vars^2))
+# Standard error
+sd(exp(-unif_vars)/(1 + unif_vars^2))/sqrt(n)
+```
+
+###
+
+Next, we will breakdown the interval $(0,1)$ into $K=10$ equal sub-intervals. For each subinterval, we will estimate the integral $\int_{a_{k-1}}^{a_k} \frac{e^{-x}}{1 + x^2}dx$. Run the code below to see the result:
+
+```{r strat2, exercise = TRUE, exercise.eval = FALSE, exercise.lines = 18}
+n <- 1000
+K <- 10
+# We will store the sample means and variances
+theta_hat <- numeric(K)
+sigma2_hat <- numeric(K)
+
+for (k in 1:K) {
+  unif_vars <- runif(n/K, min = (k-1)/K, max = k/K)
+  theta_hat[k] <- mean(exp(-unif_vars)/(1 + unif_vars^2))/K
+  sigma2_hat[k] <- var(exp(-unif_vars)/(1 + unif_vars^2))/K^2
+}
+
+# Estimate of integral
+sum(theta_hat)
+# Standard error
+sqrt(sum(sigma2_hat))/sqrt(n)
+```
+
+As we can see, this is an reduction in standard error of about 30 times.
+
+These ideas of stratified sampling can be applied to importance sampling as well. We won't discuss them in this course, but if you're interested, have a look at Section 6.8 of Rizzo's *Statistical Computing with R*.
+
+## Exercises
+
+### Exercise 1
+
+Assume $X$ follows a $t$ distribution with 12 degrees of freedom. We want to estimate the following expected value:
+$$E\left(\frac{X^5}{1 + (X - 3)^2}I(X > 0)\right),$$
+where $I(X > 0) = 1$ if $X >0$ and $I(X > 0) = 0$ otherwise. Estimate this expected value using importance sampling.
+
+**Hint**: Where is the integrand (i.e. the function we are integrating) positive? Can you find a distribution $\phi(x)$ that has support equal to this set?
+
+```{r import1, exercise = TRUE, exercise.eval = FALSE, exercise.lines = 12}
+# Write your code below----
+
+```
+
+```{r import1-solution}
+n <- 1000
+# We will use an exponential distribution
+exp_vars <- rexp(n)
+gvals <- exp_vars^5/(1 + (exp_vars - 3)^2)
+
+samples <- gvals*dt(exp_vars, df = 12)/dexp(exp_vars)
+
+# Estimate of integral
+mean(samples)
+# Standard error
+sd(samples)/sqrt(n)
+```
+
+### Exercise 2
+
+Use stratified sampling to estimate the integral 
+$$\theta = \int_1^\infty \frac{x^2}{\sqrt{2\pi}}e^{-x^2/2}dx.$$
+
+**Hint**: We know that $\int_{-\infty}^\infty \frac{x^2}{\sqrt{2\pi}}e^{-x^2/2}dx = 1$ and that the integrand is symmetric around zero. Can you write $\theta$ in terms of an integral over the interval $(0,1)$?
+
+```{r import2, exercise = TRUE, exercise.eval = FALSE, exercise.lines = 16}
+n <- 3150
+K <- 10
+# Write your code below----
+
+```
+
+```{r import2-solution}
+n <- 3150
+K <- 10
+# We will store the sample means and variances
+theta_hat <- numeric(K)
+sigma2_hat <- numeric(K)
+
+for (k in 1:K) {
+  unif_vars <- runif(n/K, min = (k-1)/K, max = k/K)
+  theta_hat[k] <- mean(unif_vars^2*dnorm(unif_vars))/K
+  sigma2_hat[k] <- var(unif_vars^2*dnorm(unif_vars))/K^2
+}
+
+# Estimate of integral
+0.5 - sum(theta_hat)
+# Standard error
+sqrt(sum(sigma2_hat))/sqrt(n)
+```
