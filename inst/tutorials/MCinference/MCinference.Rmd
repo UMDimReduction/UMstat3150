@@ -1,0 +1,323 @@
+---
+title: "Monte Carlo methods in Inference"
+output: 
+  learnr::tutorial:
+    progressive: true
+    allow_skip: true
+runtime: shiny_prerendered
+description: >
+  Learn how simulation methods can be used for hypothesis testing.
+---
+
+```{r setup, include=FALSE}
+library(learnr)
+knitr::opts_chunk$set(echo = FALSE)
+```
+
+## Welcome
+
+This is a tutorial on Monte Carlo Methods in Inference. It was created for the course STAT3150--Statistical Computing at the University of Manitoba.
+
+###  
+
+In this tutorial, we continue our discussion of Monte Carlo methods for inference. Specifically, we will look at
+
+  * using simulation methods to estimate Type I error rate and power
+  * comparing different tests using simulations
+
+## Hypothesis tests
+
+### Vocabulary
+
+In class, we defined **statistic**, **estimator**, and **sampling distribution**. Refer back to the slides if you need to refresh your memory.
+
+As we discussed, an estimator is a statistic that we use to estimate/approximate/learn about a parameter of interest $\theta$. 
+
+In *hypothesis testing*, we start with a **null hypothesis** about our parameter $\theta$:
+$$H_0: \theta = \theta_0.$$
+
+We then use a **test statistic** to determine whether we should reject or not the null hypothesis. 
+
+The key thing to remember is this: if we know the sampling distribution of our test statistic when $H_0$ holds (i.e. $\theta = \theta_0$), then we can compute how likely it is to observe some given values of a test statistic.
+
+This gives rise to the notion of a **p-value**: if your test statistic is $T$, and the observed value (i.e. after you've plugged in your data) is $t$, then the p-value is the following conditional probability:
+$$P(T > t \mid H_0\mbox{ hold}).$$
+Visually, it corresponds to the shaded area:
+
+```{r echo = FALSE, eval = TRUE}
+xvals <- seq(-3, 3, length.out = 100)
+yvals <- dnorm(xvals)
+
+plot(xvals, yvals, type = "l",
+     xlab = "", ylab = "", xaxt = "n", yaxt = "n")
+axis(1, at = xvals[81], labels = "t")
+
+polygon(x = c(xvals[81:100], rev(xvals[81:100])),
+        y = c(rep(0, 20), rev(yvals[81:100])),
+        col = "grey60")
+```
+
+Depending on the type of test statistic and the procedure we use to decide to reject or not $H_0$, p-values can also be two-sided:
+
+```{r echo = FALSE, eval = TRUE}
+xvals <- seq(-3, 3, length.out = 100)
+yvals <- dnorm(xvals)
+
+plot(xvals, yvals, type = "l",
+     xlab = "", ylab = "", xaxt = "n", yaxt = "n")
+axis(1, at = xvals[c(20, 81)], labels = c("-t", "t"))
+
+polygon(x = c(xvals[81:100], rev(xvals[81:100])),
+        y = c(rep(0, 20), rev(yvals[81:100])),
+        col = "grey60")
+polygon(x = c(xvals[1:20], rev(xvals[1:20])),
+        y = c(rep(0, 20), rev(yvals[1:20])),
+        col = "grey60")
+```
+
+Finally, there are two main types of errors one can make in hypothesis testing:
+
+  - *Type I error*: Rejecting the null hypothesis when it holds.
+  - *Type II error*: Not rejecting the null hypothesis when it doesn't hold.
+  
+### Type I error rate
+
+We can use simulations to estimate the type I error rate, i.e. the probability of a type I error.
+
+Here's the general idea:
+
+  - Simulate data assuming the null hypothesis holds.
+  - Perform a hypothesis test on the simulated data.
+  - Count the proportion of our simulations that lead to a rejection of the null hypothesis.
+  
+For example, consider two normal distributions $N(\mu_1, \sigma^2_1)$ and $N(\mu_2, \sigma^2_2)$, and assume that the null hypothesis is $H_0: \mu_1 = \mu_2$. We can generate from these two distributions by using the same mean, and use a t-test to decide whether we reject $H_0$ or not. This can be done by comparing our p-value to our significance level $\alpha$. Our estimate of the type I error rate would be the proportion of simulated datasets that led to a rejected t-test. Run the code below:
+
+```{r typeI1, exercise = TRUE, exercise.eval = FALSE}
+B <- 1000
+sigma1 <- sigma2 <- 1
+mu1 <- mu2 <- 0
+
+results <- replicate(B, {
+  # Generate two samples
+  norm_vars1 <- rnorm(20, mu1, sigma1)
+  norm_vars2 <- rnorm(20, mu2, sigma2)
+  # Perform t-test
+  output <- t.test(norm_vars1, norm_vars2)
+  # alpha = 0.05
+  return(output$p.value < 0.05)
+})
+
+table(results)/B
+```
+
+As we can see, our estimate of the Type I error rate is close to our significance level $\alpha = 0.05$. Moreover, we can also see that we can repeat this experiment for many combinations of the parameters:
+
+  - Different sample sizes between the two populations;
+  - Unequal variance;
+  - Other distributions than normal, e.g. t distribution or exponential.
+  
+This flexibility is what truly makes Monte Carlo methods powerful.
+
+#### Exercise
+
+The function `t.test` actually assumes *unequal* variance by default. Look at its help page and modify the code above so that we perform a t-test for equal variance.
+
+```{r typeI2, exercise = TRUE, exercise.eval = FALSE}
+B <- 1000
+sigma1 <- sigma2 <- 1
+mu1 <- mu2 <- 0
+
+# Type your code below
+
+```
+
+```{r typeI2-solution, eval = FALSE}
+B <- 1000
+sigma1 <- sigma2 <- 1
+mu1 <- mu2 <- 0
+
+results <- replicate(B, {
+  # Generate two samples
+  norm_vars1 <- rnorm(20, mu1, sigma1)
+  norm_vars2 <- rnorm(20, mu2, sigma2)
+  # Perform t-test
+  output <- t.test(norm_vars1, norm_vars2,
+                   var.equal = TRUE)
+  # alpha = 0.05
+  return(output$p.value < 0.05)
+})
+
+table(results)/B
+```
+
+### Power
+
+We can also use simulations to estimate statistical power, i.e. 1 - probability of a type II error.
+
+Here's the general idea:
+
+  - Simulate data assuming the null hypothesis **doesn't** hold.
+  - Perform a hypothesis test on the simulated data.
+  - Count the proportion of our simulations that lead to a rejection of the null hypothesis.
+  
+It's very similar to estimating the type I error rate: we are still counting the proportion of rejected null hypotheses, but we are generating the data under a *different* assumption.
+  
+For example, let's consider again two normal distributions $N(\mu_1, \sigma^2_1)$ and $N(\mu_2, \sigma^2_2)$, and assume that $\mu_1 \neq \mu_2$. To generate from these two distributions, we need to choose both $\mu_1, \mu_2$, and indeed different choices may lead to different powers! This is expected: the power will be larger when the two distributions are more different. Run the code below:
+
+```{r power1, exercise = TRUE, exercise.eval = FALSE}
+B <- 1000
+sigma1 <- sigma2 <- 1
+mu1 <- 0
+mu2 <- 1
+
+results <- replicate(B, {
+  # Generate two samples
+  norm_vars1 <- rnorm(20, mu1, sigma1)
+  norm_vars2 <- rnorm(20, mu2, sigma2)
+  # Perform t-test
+  output <- t.test(norm_vars1, norm_vars2)
+  # alpha = 0.05
+  return(output$p.value < 0.05)
+})
+
+table(results)/B
+```
+
+We can see that the power estimate is about 85%. And you can probably see that the code above is not much different from what we had in the previous section!
+
+Once again, the key of the simulation approach is its flexibility. We can make the data generating mechanism as simple or complex as we like, and the principle stays the same.
+
+*As an aside*: estimating power is often used for sample size calculations. In this setting, the goal is typically to fix the distributions (i.e. fix $\mu_1$, $\mu_2$, etc.) and then increase the sample size $n$ (which was 20 in our example) until we reach a certain minimum power (e.g. 80% or 90%). This process can then be repeated under different assumptions about the distributions so that you can feel confident your study has enough participants to allow you to estimate realistic effects.
+
+## Comparing estimators
+
+###
+
+We can also use simulations to compare the power of two different estimators. To do this, we need to start from the same null hypothesis, and we also need testing procedures that are *well calibrated*, i.e. their type I error rate should be (approximately) equal to the significance level.
+
+Let's compare two different variants of the t-test: the classical t-test, which assumes equal variance; and the Welch t-test, which is *also* valid when variances are not equal.
+
+```{r comp1, exercise = TRUE, exercise.eval = FALSE}
+B <- 1000
+sigma1 <- sigma2 <- 1
+mu1 <- 0
+mu2 <- 1
+
+results <- replicate(B, {
+  # Generate two samples
+  norm_vars1 <- rnorm(20, mu1, sigma1)
+  norm_vars2 <- rnorm(20, mu2, sigma2)
+  # Perform classical t-test
+  output1 <- t.test(norm_vars1, norm_vars2, var.equal = TRUE)
+  # Perform Welch t-test
+  output2 <- t.test(norm_vars1, norm_vars2, var.equal = FALSE)
+  # alpha = 0.05
+  return(c(output1$p.value, output2$p.value) < 0.05)
+})
+
+rowMeans(results)
+```
+
+As we can see, the power estimates are essentially the same. This is consistent with the literature: it is recommended to use Welch's t-test, unless the sample sizes are small (e.g. ~5 for each group). It also explains why `R` uses it as a default.
+
+### Normality tests
+
+Let's look at a more complex example. The *Kolmogorov-Smirnov* and the *Shapiro-Wilk* tests are two methods that can be used to test for normality. The null hypothesis is that the sample is generated from a normal distribution; rejecting the null hypothesis thus corresponds to having evidence that the sample does **not** comes from a normal distribution.
+
+The details of how to construct these tests are beyond the scope of this course. Instead we will use built-in functions in `R` to perform the tests:
+
+```{r eval = TRUE, echo = TRUE}
+norm_vars <- rnorm(20)
+# KS test
+ks.test(norm_vars, "pnorm")
+# SW test
+shapiro.test(norm_vars)
+```
+
+To compare power, we must generate data when the null hypothesis **doesn't** hold. Let's generate data from a t distribution on 10 degrees of freedom:
+
+```{r norm1, exercise = TRUE, exercise.eval = FALSE}
+B <- 1000
+n <- 50
+
+results <- replicate(B, {
+  # Generate sample
+  t_vars <- rt(n, 10)
+  # Perform classical t-test
+  ks_out <- ks.test(t_vars, "pnorm")
+  # Perform Welch t-test
+  sw_out <- shapiro.test(t_vars)
+  # alpha = 0.05
+  return(c("KS" = ks_out$p.value < 0.05, 
+           "SW" = sw_out$p.value < 0.05))
+})
+
+rowMeans(results)
+```
+
+As we can see, the power is very low. 
+
+## Exercises
+
+### Exercise 1
+
+Above, we compared the power of two versions of the t-test when the sample is normally distributed. However, when the data is skewed, neither test may be well calibrated. 
+
+Estimate the type I error rate of both the classical and Welch's t-test when the data is generated according to an exponential distribution.
+
+```{r mcinf1, exercise = TRUE, exercise.eval = FALSE}
+B <- 1000
+lambda1
+lambda2
+
+# Add your code below
+```
+
+
+```{r mcinf1-solution}
+B <- 1000
+lambda1 <- 1
+lambda2 <- 1
+
+results <- replicate(B, {
+  # Generate two samples
+  exp_vars1 <- rexp(20, lambda1)
+  exp_vars2 <- rexp(20, lambda2)
+  # Perform classical t-test
+  output1 <- t.test(exp_vars1, exp_vars2, var.equal = TRUE)
+  # Perform Welch t-test
+  output2 <- t.test(exp_vars1, exp_vars2, var.equal = FALSE)
+  # alpha = 0.05
+  return(c(output1$p.value, output2$p.value) < 0.05)
+})
+
+rowMeans(results)
+```
+
+### Exercise 2
+
+Repeat the comparison above between the Kolmogorov-Smirnov and Shapiro-Wilk tests for normality, but this time use a *skewed* distribution to generate a sample when the null hypothesis doesn't hold.
+
+```{r mcinf2, exercise = TRUE, exercise.eval = FALSE}
+B <- 1000
+# Add your code below
+```
+
+```{r mcinf2-solution}
+B <- 1000
+n <- 50
+
+results <- replicate(B, {
+  # Generate sample for exponential
+  exp_vars <- rexp(n)
+  # Perform classical t-test
+  ks_out <- ks.test(exp_vars, "pnorm")
+  # Perform Welch t-test
+  sw_out <- shapiro.test(exp_vars)
+  # alpha = 0.05
+  return(c("KS" = ks_out$p.value < 0.05, 
+           "SW" = sw_out$p.value < 0.05))
+})
+
+rowMeans(results)
+```
