@@ -267,8 +267,8 @@ Estimate the type I error rate of both the classical and Welch's t-test when the
 
 ```{r mcinf1, exercise = TRUE, exercise.eval = FALSE}
 B <- 1000
-lambda1
-lambda2
+lambda1 <- NULL
+lambda2 <- NULL
 
 # Add your code below
 ```
