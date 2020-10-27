@@ -1,0 +1,430 @@
+---
+title: "Bootstrap and Jackknife"
+output: 
+  learnr::tutorial:
+    progressive: true
+    allow_skip: true
+runtime: shiny_prerendered
+description: >
+  Learn about other applications of jackknife and bootstrap.
+---
+
+```{r setup, include=FALSE}
+library(learnr)
+knitr::opts_chunk$set(echo = FALSE)
+
+# Setup code
+library(tidyverse)
+fit <- lm(dist ~ speed, data = cars)
+residuals <- resid(fit)
+n <- nrow(cars)
+jack_resids <- numeric(n)
+for (i in 1:n) {
+  # Omit observation i
+  data_subset <- cars[-i,]
+  # Refit model with smaller dataset
+  fit_sub <- lm(dist ~ speed, 
+                data = data_subset)
+  # Compute sd of these residuals
+  sd_sub <- sd(resid(fit_sub))
+  # Compute jackknife residuals
+  jack_resids[i] <- residuals[i]/sd_sub
+}
+```
+
+## Welcome
+
+This is a tutorial on Bootstrap and Jackknife. It was created for the course STAT3150--Statistical Computing at the University of Manitoba.
+
+###  
+
+In this tutorial, we continue our discussion of Bootstrap and Jackknife. Specifically, we will look at
+
+  * how jackknife can be used with linear regression
+  * how bootstrap percentile confidence intervals can be improved.
+  
+## Linear Regression
+
+### Quick Review
+
+In **linear regression**, we start with an outcome variable $Y$, and $p$ covariates $X_1, \ldots, X_p$. Next, we make an assumption about their relationship:
+$$ Y = \beta_0 + \beta_1 X_1 + \cdots + \beta_p X_p + \epsilon,$$
+where $\epsilon$ is a random variable with mean 0 and variance $\sigma^2$. 
+
+Another equivalent way to write this relationship is in terms of a *conditional expectation*:
+$$ E(Y \mid X_1, \ldots, X_p) = \beta_0 + \beta_1 X_1 + \cdots + \beta_p X_p.$$
+The coefficients $\beta_i$ represent comparisons of **means** for different values of the covariates (i.e. for different individuals).
+
+Given observations $(Y_i, X_{i1}, \ldots, X_{ip})$, for $i=1,\ldots,n$, we can estimate the coefficients $\beta_i$ using **least square estimation**. In `R`, we can use the function `lm`. We will use the `cars`:
+
+```{r echo = TRUE, eval = TRUE}
+head(cars)
+```
+
+We will use linear regression to estimate the association between the outcome `dist` (distance taken to stop) and the covariate `speed` (speed of the car). Run the code below:
+
+```{r reg1, exercise = TRUE, exercise.eval = FALSE}
+fit <- lm(dist ~ speed, data = cars)
+summary(fit)
+```
+
+As we can see, on average, a difference of 1 mile-per-hour is associated with a difference of 3.93 feet in the distance taken to stop. 
+
+### Jackknife and estimates
+
+We can use the jackknife to estimate the bias and standard error of the regression coefficient.
+
+One important aspect to keep in mind: an observation is a tuple $(Y_i, X_{i1}, \ldots, X_{ip})$, and therefore omitting an observation corresponds to omitting **the entire row from the dataset**. We can do this using the bracket notation:
+
+```{r echo = TRUE, eval = TRUE}
+# How many rows and columns in the original data?
+dim(cars)
+# Omit row i=12
+i <- 12
+data_subset <- cars[-i,]
+dim(data_subset)
+```
+
+In the code box below, add the necessary code to compute the jackknife estimate of bias for the regression coefficient:
+
+```{r reg2, exercise = TRUE, exercise.eval = FALSE}
+beta_hat <- coef(fit)[2]
+n <- nrow(cars)
+beta_i <- numeric(n)
+# Add your code below
+
+
+# Compute bias estimate
+bias <- (n-1)*(mean(beta_i) - beta_hat)
+bias
+```
+
+```{r reg2-solution}
+beta_hat <- coef(fit)[2]
+n <- nrow(cars)
+beta_i <- numeric(n)
+
+for (i in 1:n) {
+  # Omit observation i
+  data_subset <- cars[-i,]
+  # Refit model with smaller dataset
+  fit_sub <- lm(dist ~ speed, 
+                data = data_subset)
+  # Extract slope coefficient
+  beta_i[i] <- coef(fit_sub)[2]
+}
+
+# Compute bias estimate
+bias <- (n-1)*(mean(beta_i) - beta_hat)
+bias
+```
+
+### Jackknife and outliers
+
+In linear regresion, an **outlier** is an observation with a large residual value, i.e. the observed value and fitted value are quite different. An **influential observation** is an observation that has a large impact on the regression results. These two concepts are similar but distinct, and jackknife can be used to study both concepts.
+
+The residuals of a linear model can be extracted using the `resid` function:
+
+```{r echo = TRUE, eval = TRUE}
+residuals <- resid(fit)
+head(residuals)
+```
+
+It is very common to standardize the residuals so that they have variance 1. We can compare the two approaches using a histogram:
+
+```{r echo = TRUE, eval = TRUE, message = FALSE}
+stand_resids <- residuals/sd(residuals)
+
+library(ggplot2)
+n <- nrow(cars)
+data.frame(Approach = rep(c("Residuals", "Stand. Resids"), each = n),
+           resids = c(residuals, stand_resids)) %>% 
+  ggplot(aes(resids)) +
+  geom_histogram() +
+  facet_grid(. ~ Approach, scales = "free_x")
+```
+
+As we can see, they look the same, but the scale are different. On both plots, we seem to have two potential outliers with residual value greater than 40.
+
+If we have an outlier, then it will inflate the variance and mask its importance when we standardize. One way to address this is with the **jackknife residual**: instead of dividing by the standard deviation of the residuals, we can divide by the standard deviation that you get from fitting the model while omitting the $i$-th observation.
+
+```{r, echo = TRUE, eval = TRUE}
+jack_resids <- numeric(n)
+for (i in 1:n) {
+  # Omit observation i
+  data_subset <- cars[-i,]
+  # Refit model with smaller dataset
+  fit_sub <- lm(dist ~ speed, 
+                data = data_subset)
+  # Compute sd of these residuals
+  sd_sub <- sd(resid(fit_sub))
+  # Compute jackknife residuals
+  jack_resids[i] <- residuals[i]/sd_sub
+}
+```
+
+Again, let's compare the histograms:
+
+```{r echo = TRUE, eval = TRUE, message = FALSE}
+data.frame(Approach = rep(c("Stand. Resids", "Jack. Resids"), each = n),
+           resids = c(stand_resids, jack_resids)) %>% 
+  ggplot(aes(resids)) +
+  geom_histogram() +
+  facet_grid(. ~ Approach)
+```
+
+With the jackknife residuals, the two potential outliers have been pushed further away from the main distribution, providing more evidence of being outliers.
+
+We can look at their values by running the code below:
+
+```{r reg3, exercise = TRUE, exercise.eval = FALSE}
+# The top 2 values are for i=23 and i=49
+cars[c(23, 49),]
+```
+
+###
+
+For measuring the influence of an observation on the regression output, we can use **Cook's distance**. It is defined as follows:
+$$ D_i = \frac{(\hat{\beta}_{(i)} - \hat{\beta})^T\mathbf{X}^T\mathbf{X}(\hat{\beta}_{(i)} - \hat{\beta})}{(p + 1)\hat{\sigma}^2},$$
+where:
+
+  - $\hat{\beta}$ is the vector of all regression coefficient estimates using the full dataset;
+  - $\hat{\beta}_{(i)}$ is the vector of all regression coefficient estimates when omitting the $i$-th observation;
+  - $\mathbf{X}$ is the design matrix;
+  - $p$ is the number of covariates (and $p+1$ is the number of columns of $\mathbf{X}$);
+  - $\hat{\sigma}^2$ is the sample variance of the residuals.
+  
+Again, we can see how jackknife is used to assess the influence of each observation. To compute the Cook's distance, run the code below:
+
+```{r reg4, exercise = TRUE, exercise.eval = FALSE}
+beta_hat <- coef(fit) # Both estimates
+Xmat <- model.matrix(fit)
+sigma2_hat <- var(residuals)
+cook_i <- numeric(n)
+
+for (i in 1:n) {
+  # Omit observation i and refit
+  data_subset <- cars[-i,]
+  fit_sub <- lm(dist ~ speed, 
+                data = data_subset)
+  # crossprod(A) gives A^TA
+  cook_i[i] <- crossprod(Xmat %*% (beta_hat - coef(fit_sub)))/(2*sigma_hat)
+}
+
+# Look at top values
+head(sort(cook_i, decreasing = TRUE))
+```
+
+As we can see, there is one observation whose Cook's distance is larger than the rest. Let's look at the data:
+
+```{r reg5, exercise = TRUE, exercise.eval = FALSE}
+# The top value is for i=49
+cars[49,]
+```
+
+Both the jackknife residuals and Cook's distance highlighted observation $i=49$. If we look at a scatterplot of the data with the fitted line overlaid, we can see that there is no evidence the influential observation (in blue) is a "wrong" value or a data mistake. Therefore, we should keep it in our dataset.
+
+```{r, eval = TRUE, echo = FALSE}
+with(cars, plot(speed, dist))
+with(cars[49,], points(speed, dist, col = "blue", pch = 19))
+abline(a = coef(fit)[1], b = coef(fit)[2], col = "red")
+```
+
+
+## BCa confidence intervals
+
+### Definition
+
+The BCa confidence interval is an improvement on the bootstrap percentile approach. The letters "BCa" stand for "bias-corrected" and "adjusted for acceleration". 
+
+Let $\Phi$ be the CDF of the standard normal distribution. The **BCa confidence interval** is also defined using quantiles of the bootstrap sample: $(\hat{\theta}_{\beta_1}, \hat{\theta}_{\beta_2})$, where
+\begin{align*}
+\beta_1 &= \Phi\left(\hat{z}_0 + \frac{\hat{z}_0 + z_{\alpha/2}}{1 - \hat{a}(\hat{z}_0 + z_{\alpha/2})}\right),\\
+\beta_2 &= \Phi\left(\hat{z}_0 + \frac{\hat{z}_0 + z_{1\alpha/2}}{1 - \hat{a}(\hat{z}_0 + z_{\alpha/2})}\right).
+\end{align*}
+Here, the quantities $\hat{z}_0$ and $\hat{a}$ (defined below) are correction factors for bias and skewness, respectively. If we have $\hat{z}_0 = 0$ and $\hat{a} = 0$, then the formulas above simplify to $\beta_1 = \alpha/2$ and $\beta_2 = 1- \alpha/2$, and the BCa interval then becomes the same as the bootstrap percentile.
+
+###
+
+**How are these two quantities defined?** The bias correction factor is defined as
+$$\hat{z}_0 = \Phi^{-1}\left(\frac{1}{B} \sum_{b=1}^B I(\hat{\theta}^{(b)} < \hat{\theta})\right),$$
+where $\Phi^{-1}$ is the *quantile function* from the standard normal distribution. Note that $\hat{z}_0 = 0$ if and only if $\hat{\theta}$ is the median of the bootstrap samples.
+
+The acceleration factor is estimated using jackknife:
+$$\hat{a} = \frac{\sum_{i=1}^n(\overline{\theta_{(\cdot)}} - \hat{\theta}_{(i)})^3}{6\left(\sum_{i=1}^n\left(\overline{\theta_{(\cdot)}} - \hat{\theta}_{(i)}\right)^2\right)^{3/2}},$$
+where $\overline{\theta_{(\cdot)}}$ is the sample mean of the jackknife estimates $\hat{\theta}_{(i)}$.
+
+Notice the difference with the student bootstrap confidence intervals: for Student, we need a second level of bootstrap to estimate the standard error of a *single* bootstrap estimate $\hat{\theta}^{(b)}$; this will lead to a total of $B_1\cdot B_2$ iterations, where $B_1$ and $B_2$ are the number of bootstrap samples at each level. On the other hand, for the BCa interval, the bootstrap and the jackknife are done independently; this will lead to a total of $B + n$ iterations.
+
+### Example
+
+Let's compute the BCa interval for the `law` dataset in the `bootstrap` package:
+
+```{r eval = TRUE, echo = TRUE}
+library(bootstrap)
+# Estimate of rho
+rho_hat <- cor(law$LSAT, law$GPA)
+rho_hat
+
+# Bootstrap replicates
+n <- nrow(law)
+boot_rho <- replicate(5000, {
+  # Sample with replacement
+  indices <- sample(n, n, replace = TRUE)
+  # We're sampling pairs of observations
+  # to keep correlation structure
+  cor(law$LSAT[indices], law$GPA[indices])
+})
+```
+
+From this, we can estimate $\hat{z}_0$:
+
+```{r eval = TRUE, echo = TRUE}
+z0_hat <- qnorm(mean(boot_rho < rho_hat))
+z0_hat
+```
+
+Next we need the jackknife estimates:
+
+```{r eval = TRUE, echo = TRUE}
+# Jackknife
+rho_i <- numeric(n)
+
+for (i in 1:n) {
+  rho_i[i] <- cor(law$LSAT[-i], law$GPA[-i])
+}
+```
+
+From this, we can estimate $\hat{a}$:
+
+```{r eval = TRUE, echo = TRUE}
+rho_bar <- mean(rho_i)
+
+a_hat <- sum((rho_bar - rho_i)^3)/(6*sum((rho_bar - rho_i)^2)^(3/2))
+a_hat
+```
+
+Now that we have all the pieces, we can compute the confidence interval:
+
+```{r eval = TRUE, echo = TRUE}
+beta1 <- pnorm(z0_hat + (z0_hat - 1.96)/(1 - a_hat*(z0_hat - 1.96)))
+beta2 <- pnorm(z0_hat + (z0_hat + 1.96)/(1 - a_hat*(z0_hat + 1.96)))
+c(beta1, beta2)
+
+# BCa interval
+quantile(boot_rho, probs = c(beta1, beta2))
+
+# Compare with percentile
+quantile(boot_rho, probs = c(0.025, 0.975))
+```
+
+### Theoretical properties of bootstrap CIs
+
+There are at least two theoretical properties that are of interest when it comes to bootstrap confidence intervals:
+
+  - **Transformation invariant**: If $(a, b)$ is a confidence interval for a parameter $\theta$, then for any monotone transformation $m$, the interval $(m(a), m(b))$ is a confidence interval for the parameter $m(\theta)$.
+  - **Accuracy**: We say a confidence interval is *first-order* accurate if its error goes to zero at the same rate as $1/\sqrt{n}$; we say it is *second-order* accurate if its error goes to zero at the same rate as $1/n$ (so twice as fast).
+  
+In the table below, we list the theoretical properties of the five confidence intervals that we have discussed in this class:
+
+|                 | Transformation Invariant | Accuracy     |
+|-----------------|:------------------------:|:------------:|
+| Standard normal | No                       | First order  |
+| Percentile      | Yes                      | First order  |
+| Basic Bootstrap | Yes                      | First order  |
+| Student CI      | No                       | Second order |
+| BCa interval    | Yes                      | Second order |
+
+As we can see, the BCa interval is the **only one** of the five that is both transformation invariant and second-order accurate. On the other hand, the second-order accuracy comes with a steep computational price, since we typically need a second level of resampling.
+
+## Exercises
+
+### Exercise 1
+
+Recall the `patch` dataset in the `bootstrap` package: we were interested in the ratio $\theta$ of means:
+
+```{r echo = TRUE, eval = TRUE}
+library(bootstrap)
+mean(patch$y)/mean(patch$z)
+```
+
+Use bootstrap to estimate the **bias** and **standard error** of $\theta_hat$.
+
+```{r boot1, exercise = TRUE, exercise.eval = FALSE}
+library(bootstrap)
+theta_hat <- mean(patch$y)/mean(patch$z)
+
+# Add your code below
+```
+
+```{r boot1-solution}
+library(bootstrap)
+theta_hat <- mean(patch$y)/mean(patch$z)
+
+n <- nrow(patch)
+B <- 5000
+boot_theta <- replicate(B, {
+  indices <- sample(n, n, replace = TRUE)
+  mean(patch$y[indices])/mean(patch$z[indices])
+})
+
+# Bias
+mean(boot_theta) - theta_hat
+
+# Standard error
+sd(boot_theta)
+```
+
+### Exercise 2
+
+Compute approximate 95% confidence intervals for $\theta$ using the **basic bootstrap** and **BCa** methods.
+
+```{r boot2, exercise = TRUE, exercise.eval = FALSE, exercise.lines = 35}
+library(bootstrap)
+theta_hat <- mean(patch$y)/mean(patch$z)
+
+# Compute bootstrap samples
+n <- nrow(patch)
+B <- 5000
+boot_theta <- replicate(B, {
+  indices <- sample(n, n, replace = TRUE)
+  mean(patch$y[indices])/mean(patch$z[indices])
+})
+
+# Add your code below
+```
+
+```{r boot2-solution}
+library(bootstrap)
+theta_hat <- mean(patch$y)/mean(patch$z)
+
+# Compute bootstrap samples
+n <- nrow(patch)
+B <- 5000
+boot_theta <- replicate(B, {
+  indices <- sample(n, n, replace = TRUE)
+  mean(patch$y[indices])/mean(patch$z[indices])
+})
+
+# Basic bootstrap interval
+crit_vals <- quantile(boot_theta,
+                      probs = c(0.025, 0.975))
+c(2*theta_hat - crit_vals[2],
+  2*theta_hat - crit_vals[1],
+  use.names = FALSE)
+
+# BCa interval
+z0_hat <- qnorm(mean(boot_theta < theta_hat))
+
+theta_i <- numeric(n)
+for (i in 1:n) {
+  theta_i[i] <- mean(patch$y[-i])/mean(patch$z[-i])
+}
+theta_bar <- mean(theta_i)
+
+a_hat <- sum((theta_bar - theta_i)^3)/(6*sum((theta_bar - theta_i)^2)^(3/2))
+beta1 <- pnorm(z0_hat + (z0_hat - 1.96)/(1 - a_hat*(z0_hat - 1.96)))
+beta2 <- pnorm(z0_hat + (z0_hat + 1.96)/(1 - a_hat*(z0_hat + 1.96)))
+
+quantile(boot_theta, probs = c(beta1, beta2))
+```
