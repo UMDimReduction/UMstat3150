@@ -240,7 +240,7 @@ The BCa confidence interval is an improvement on the bootstrap percentile approa
 Let $\Phi$ be the CDF of the standard normal distribution. The **BCa confidence interval** is also defined using quantiles of the bootstrap sample: $(\hat{\theta}_{\beta_1}, \hat{\theta}_{\beta_2})$, where
 \begin{align*}
 \beta_1 &= \Phi\left(\hat{z}_0 + \frac{\hat{z}_0 + z_{\alpha/2}}{1 - \hat{a}(\hat{z}_0 + z_{\alpha/2})}\right),\\
-\beta_2 &= \Phi\left(\hat{z}_0 + \frac{\hat{z}_0 + z_{1\alpha/2}}{1 - \hat{a}(\hat{z}_0 + z_{\alpha/2})}\right).
+\beta_2 &= \Phi\left(\hat{z}_0 + \frac{\hat{z}_0 + z_{1 - \alpha/2}}{1 - \hat{a}(\hat{z}_0 + z_{1 - \alpha/2})}\right).
 \end{align*}
 Here, the quantities $\hat{z}_0$ and $\hat{a}$ (defined below) are correction factors for bias and skewness, respectively. If we have $\hat{z}_0 = 0$ and $\hat{a} = 0$, then the formulas above simplify to $\beta_1 = \alpha/2$ and $\beta_2 = 1- \alpha/2$, and the BCa interval then becomes the same as the bootstrap percentile.
 
