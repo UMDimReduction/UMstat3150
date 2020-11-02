@@ -27,7 +27,6 @@ These are the planned tutorials:
   4. `importance`: Importance sampling
   5. `MCinference`: Monte Carlo methods in inference
   6. `bootstrap`: Bootstrap and Jackknife
-  7. `resampling`: Resampling applications
-  8. `permutation`: Permutation tests
-  9. `numerical`: Numerical methods
-  10. `optimisation`: Introduction to optimisation
+  7. `permutation`: Permutation tests
+  8. `numerical`: Numerical methods
+  9. `optimisation`: Introduction to optimisation
