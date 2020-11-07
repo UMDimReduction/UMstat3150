@@ -318,7 +318,7 @@ boot_rho &lt;- replicate(5000, {
 <p>From this, we can estimate <span class="math inline">\(\hat{z}_0\)</span>:</p>
 <pre class="r"><code>z0_hat &lt;- qnorm(mean(boot_rho &lt; rho_hat))
 z0_hat</code></pre>
-<pre><code>## [1] -0.08482565</code></pre>
+<pre><code>## [1] -0.05467172</code></pre>
 <p>Next we need the jackknife estimates:</p>
 <pre class="r"><code># Jackknife
 rho_i &lt;- numeric(n)
@@ -336,15 +336,15 @@ a_hat</code></pre>
 <pre class="r"><code>beta1 &lt;- pnorm(z0_hat + (z0_hat - 1.96)/(1 - a_hat*(z0_hat - 1.96)))
 beta2 &lt;- pnorm(z0_hat + (z0_hat + 1.96)/(1 - a_hat*(z0_hat + 1.96)))
 c(beta1, beta2)</code></pre>
-<pre><code>## [1] 0.006140258 0.940304038</code></pre>
+<pre><code>## [1] 0.007513355 0.946362631</code></pre>
 <pre class="r"><code># BCa interval
 quantile(boot_rho, probs = c(beta1, beta2))</code></pre>
-<pre><code>## 0.6140258%   94.0304% 
-##  0.3542352  0.9444985</code></pre>
+<pre><code>## 0.7513355%  94.63626% 
+##  0.3605837  0.9447637</code></pre>
 <pre class="r"><code># Compare with percentile
 quantile(boot_rho, probs = c(0.025, 0.975))</code></pre>
 <pre><code>##      2.5%     97.5% 
-## 0.4677953 0.9620549</code></pre>
+## 0.4664788 0.9587391</code></pre>
 </div>
 <div id="section-theoretical-properties-of-bootstrap-cis" class="section level3">
 <h3>Theoretical properties of bootstrap CIs</h3>

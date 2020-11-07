@@ -208,7 +208,7 @@ for (i in 1:n) {
   fit_sub <- lm(dist ~ speed, 
                 data = data_subset)
   # crossprod(A) gives A^TA
-  cook_i[i] <- crossprod(Xmat %*% (beta_hat - coef(fit_sub)))/(2*sigma_hat)
+  cook_i[i] <- crossprod(Xmat %*% (beta_hat - coef(fit_sub)))/(2*sigma2_hat)
 }
 
 # Look at top values
