@@ -1,0 +1,387 @@
+---
+title: "Permutation Tests"
+output: 
+  learnr::tutorial:
+    progressive: true
+    allow_skip: true
+runtime: shiny_prerendered
+description: >
+  Learn about further topics related to permutation tests.
+---
+
+```{r setup, include=FALSE}
+library(learnr)
+knitr::opts_chunk$set(echo = FALSE)
+library(tidyverse)
+options("dplyr.summarise.inform" = FALSE)
+# Setup code
+dist_cor <- function(X, Y) {
+  # Compute matrices
+  amat <- as.matrix(dist(X, method = "manhattan"))
+  bmat <- as.matrix(dist(Y, method = "manhattan"))
+  # A_kl
+  Amat <- sweep(amat, 1, rowMeans(amat)) # 1 means to each row
+  Amat <- sweep(Amat, 2, rowMeans(amat)) # 2 means to each col
+  Amat <- Amat + mean(amat)
+  # B_kl
+  Bmat <- sweep(bmat, 1, rowMeans(bmat)) # 1 means to each row
+  Bmat <- sweep(Bmat, 2, rowMeans(bmat)) # 2 means to each col
+  Bmat <- Bmat + mean(bmat)
+  # Distance covariance
+  V_XY <- mean(Amat*Bmat)
+  V_X <- mean(Amat^2)
+  V_Y <- mean(Bmat^2)
+  # Distance correlation
+  R_XY <- V_XY/sqrt(V_X * V_Y)
+  return(R_XY)
+}
+```
+
+## Welcome
+
+This is a tutorial on Permutation Tests. It was created for the course STAT3150--Statistical Computing at the University of Manitoba.
+
+###  
+
+In this tutorial, we continue our discussion of Permutation Tests. Specifically, we will look at
+
+  * how to invert bootstrap confidence intervals to compute p-values
+  * how Fisher's exact test is a special case of a permutation test
+  * how to test for independence using the distance correlation.
+
+## P-values from confidence intervals
+
+###
+
+In class, we discussed how bootstrap (and jackknife) gives us confidence intervals, and that permutation tests allows us compute p-values. 
+
+But actually, confidence intervals can be "inverted" to compute p-values, and therefore bootstrap can also be used to compute p-values.
+
+The main idea is as follows: a p-value can be characterized as being equal to the **smallest significance level at which we would still reject the null hypothesis**. For example, say we computed a p-value of 0.012. We would reject the null hypothesis for $\alpha = 0.05$, but we would *not* reject if $\alpha = 0.01$. In fact, we would only reject for significance levels $\alpha \geq 0.012$.
+
+How does this relate to confidence intervals? They are also constructed using significance levels! Indeed, a 95% confidence correspond to a significance level of $\alpha = 0.05$. On the other hand, we can reject the null hypothesis $H_0:\theta = \theta_0$ if the value $\theta_0$ is contained in the confidence interval.
+
+This gives us a way to "invert" confidence intervals and compute a p-value: the p-value is equal to the smallest significance level $\alpha$ such that $\theta_0$ is **not** included in the $(1 - \alpha)$% confidence interval.
+
+```{r boot1, echo=FALSE}
+question("What happens to the length of a confidence interval when you **increase** the significance level?",
+  answer("It becomes smaller.", correct = TRUE),
+  answer("It becomes wider.")
+)
+```
+
+###
+
+Let's go back to the example we saw in class: the dataset `chickwts` contains weight measurements for 71 chicks that are receiving one of six possible feed. We were interested in comparing the weight distribution for chicks on soybean and linseed feed, respectively.
+
+```{r boot_chick, warning = FALSE, echo = TRUE, eval = TRUE}
+# Let's bootstrap
+library(tidyverse)
+data <- filter(chickwts, 
+               feed %in% c("soybean", "linseed"))
+n <- nrow(data)
+B <- 500
+
+results <- replicate(B, {
+  indices <- sample(n, n, replace = TRUE)
+  
+  data[indices, ] %>% 
+    group_by(feed) %>% 
+    summarise(mean = mean(weight)) %>% 
+    pull(mean) %>% 
+    diff
+})
+
+# 95% confidence interval
+soy_vec <- filter(chickwts, feed == "soybean") %>% 
+  pull(weight)
+lin_vec <- filter(chickwts, feed == "linseed") %>% 
+  pull(weight)
+
+mu_diff <- mean(soy_vec) - mean(lin_vec)
+se_boot <- sd(results)
+c(mu_diff - 1.96*se_boot, mu_diff + 1.96*se_boot)
+```
+
+As we can see, the value $\theta_0 = 0$ for the difference of means is included in the confidence interval.
+
+If we repeat the construction of the confidence interval for larger values of $\alpha$, we will reach a point where the lower bound is exactly zero. Let's check this.
+
+```{r eval = TRUE, echo = TRUE}
+alpha_vec <- seq(0.05, 0.5, by = 0.05)
+conf_ints <- matrix(NA, ncol = 3, 
+                    nrow = length(alpha_vec))
+colnames(conf_ints) <- c("alpha", 
+                         "Lower bound",
+                         "Upper bound")
+
+for (i in 1:length(alpha_vec)) {
+  # Compute critical value
+  z_crit <- qnorm(1 - 0.5*alpha_vec[i])
+  
+  conf_ints[i, ] <- c(alpha_vec[i], 
+                      mu_diff - z_crit*se_boot,
+                      mu_diff + z_crit*se_boot)
+}
+
+conf_ints
+```
+
+As we can see, somewhere between $\alpha = 0.15$ and $\alpha = 0.20$, the lower bound of the interval is equal to 0. Which means that the p-value derived from the confidence interval would also be between 0.15 and 0.20.
+
+In the next module on numerical methods, we will see how we could compute that p-value with more accuracy. But for now, we will content ourselves with this range, which is consistent with what we obtained with the t-test and the permutation test.
+
+## Fisher's exact test
+
+###
+
+Fisher developed this exact test to disprove the following theory: a lady in England claimed that she could always tell whether milk or tea was poured in a cup first. Fisher designed the following experiment: he randomly filled four cups with tea first, and four cups with milk first. He then asked the lady to guess which four cups were filled with milk first. The results were as follows:
+
+|             | Guess Milk | Guess Tea |
+|-------------|:----------:|:---------:|
+| Actual Milk |      3     |     1     |
+| Actual Tea  |      1     |     3     |
+
+Fisher's null hypothesis was that the lady was guessing randomly. 
+
+Under this null hypothesis, the value in the top left cell (i.e. correct milk guesses) follows a *hypergeometric distribution*. Therefore, we can calculate the probability that she correctly guessed 3:
+
+```{r echo = TRUE, eval = TRUE}
+dhyper(3, m = 4, n = 4, k = 4)
+```
+
+*What would be a more extreme value?* If she had guessed 4 correctly! Therefore the p-value is the sum of the probability mass function at $x = 3$ and $x = 4$:
+
+```{r echo = TRUE, eval = TRUE}
+dhyper(3, m = 4, n = 4, k = 4) +
+  dhyper(4, m = 4, n = 4, k = 4)
+```
+
+Given that probability, Fisher concluded there was a lack of evidence that the lady could really tell which was poured first.
+
+### 
+
+More generally, Fisher's exact test is a test of independence between two factors (e.g. the true liquid poured first and the lady's guess). An important assumption is that the **row totals** and the **column totals** should be *fixed* by design. This was the case in Fisher's experiment: he poured 4 cups of each, and told the lady, so each row and each column in the table above has to sum to 4.
+
+This assumption is important: it implies that the value of a single cell completely determines the value of the other three cells. Therefore, we can use any of the four cells as our test statistic. For example, if we pick the lower left cell (i.e. wrong milk guesses), we get the same p-value (but note the difference in which values are more extreme!):
+
+```{r echo = TRUE, eval = TRUE}
+dhyper(1, m = 4, n = 4, k = 4) +
+  dhyper(0, m = 4, n = 4, k = 4)
+```
+
+### 
+
+*What is the connection with permutation tests?* Under the null hypothesis, the value of any cell follows a hypergeometric distribution. Therefore, we can quantify the likelihood of *any* permutation of the data that would lead to a valid 2x2 table (i.e. with the correct row and column sums). 
+
+If we permute the data, the frequency of each configuration will converge to the hypergeometric probabilities, and we will obtain the same p-value. Let's try it out by running the code below:
+
+```{r fisher1, exercise = TRUE, exercise.eval = FALSE}
+data <- rep(c("Milk", "Tea"), each = 4)
+K <- 1000
+
+results <- replicate(K, {
+  data_perm <- sample(data)
+  # Treat first 4 values as if the lady 
+  # had guessed milk
+  sum(data_perm[1:4] == "Milk")
+})
+
+mean(c(3, results) >= 3)
+```
+
+As we can see, we get a similar p-value.
+
+Fisher's exact test is very much in the same spirit as the permutation tests we discussed in class! But the limitation (read: non-existence) of computational resources back then meant that Fisher couldn't *physically* permute the data; instead, he had to compute the probability of each permutation.
+
+## Distance correlation
+
+###
+
+This topic is more advanced, and I've included it only for your personal interest. *You can omit this section.*
+
+As we briefly mentioned in class, permutation tests can be used to test for independence. Recall the general idea: suppose we have two variables $X,Y$ (they could also be random vectors), with $F_X,F_Y$ the marginal distributions and $F_{XY}$ the joint distribution. Then independence is equivalent to $F_{XY} = F_XF_Y$. This means that independence between $X$ and $Y$ corresponds to the following null hypothesis:
+$$ H_0: F_{XY} = F_XF_Y.$$
+
+If we assume our data follows a normal distribution, then independence is equivalent to having no correlation. In that special case, we could test for independence by building a correlation test:
+$$H_0: \mathrm{Corr}(X, Y) = 0.$$
+
+But in general, independence is stricter than no correlation. For that reason, we need a different test statistic. 
+
+Székely, Rizzo, and Bakirov (2007) introduced the notion of **distance correlation** for exactly that purpose: they were looking for a measure of dependence that would be equal to zero if and only if the variables $X,Y$ are independent. Their definition is valid for random vectors $\mathbf{X},\mathbf{Y}$ of different lengths. But for the purposes of this discussion, we will focus on $X,Y$ random variables.
+
+###
+
+Here are the definitions. Let $(X_1, Y_1), \ldots, (X_n, Y_n)$ be a sample of size $n$ (so both variables are measured on the same experimental unit). Define two $n\times n$ matrices:
+$$a_{k\ell} = \lvert X_k - X_\ell\rvert, \qquad b_{k\ell} = \lvert Y_k - Y_\ell\rvert.$$
+Next, create two new $n\times n$ matrices from the previous ones by subtracting the row means, the column means, and adding back the overall mean:
+$$A_{k\ell} = a_{k\ell} - \bar{a}_{k\cdot} - \bar{a}_{\cdot\ell} + \bar{a}_{\cdot\cdot},$$
+$$B_{k\ell} = b_{k\ell} - \bar{b}_{k\cdot} - \bar{b}_{\cdot\ell} + \bar{b}_{\cdot\cdot}.$$
+Next, define the **empirical distance covariance** as follows:
+$$V(X, Y) = \frac{1}{n^2}\sum_{k=1}^n \sum_{\ell = 1}^n A_{k\ell}B_{k\ell},$$
+$$V(X) = \frac{1}{n^2}\sum_{k=1}^n \sum_{\ell = 1}^n A_{k\ell}^2,$$
+$$V(Y) = \frac{1}{n^2}\sum_{k=1}^n \sum_{\ell = 1}^n B_{k\ell}^2.$$
+Finally, the **empirical distance correlation** is defined as:
+$$R(X, Y) = \frac{V(X, Y)}{\sqrt{V(X)V(Y)}},$$
+as long as the denominator is nonzero. Otherwise, we set $R(X, Y) = 0$.
+
+###
+
+That was a long definition... Let see how we can implement this in `R`. First, we will generate data and compute the matrices $a_{k\ell}$ and $b_{k\ell}$:
+
+```{r echo = TRUE, eval = TRUE}
+# Generate data
+n <- 20
+xvec <- runif(n)
+yvec <- rexp(n)
+
+# Compute matrices
+amat <- as.matrix(dist(xvec, method = "manhattan"))
+bmat <- as.matrix(dist(yvec, method = "manhattan"))
+```
+
+In the code above, the function `dist` can compute several types of distances. We use the `manhattan` distance, as it corresponds to the absolute value distance above. Finally, we use `as.matrix` to obtain the matrix of pairwise distances.
+
+Next, we can use the function `sweep`, which "sweeps out", or subtracts, a summary statistic to all rows and all columns:
+
+```{r echo = TRUE, eval = TRUE}
+# Note: row means and column means are equal
+all.equal(rowMeans(amat), colMeans(amat))
+# A_kl
+Amat <- sweep(amat, 1, rowMeans(amat)) # 1 means to each row
+Amat <- sweep(Amat, 2, rowMeans(amat)) # 2 means to each col
+Amat <- Amat + mean(amat)
+# B_kl
+Bmat <- sweep(bmat, 1, rowMeans(bmat)) # 1 means to each row
+Bmat <- sweep(Bmat, 2, rowMeans(bmat)) # 2 means to each col
+Bmat <- Bmat + mean(bmat)
+```
+
+Finally, we can compute the distance covariances and the distance correlation:
+
+```{r echo = TRUE, eval = TRUE}
+V_XY <- mean(Amat*Bmat)
+V_X <- mean(Amat^2)
+V_Y <- mean(Bmat^2)
+
+R_XY <- V_XY/sqrt(V_X * V_Y)
+R_XY
+```
+
+This is our test statistic. We can put all these computations inside a function, which we'll use with a permutation test:
+
+```{r echo = TRUE, eval = TRUE}
+dist_cor <- function(X, Y) {
+  # Compute matrices
+  amat <- as.matrix(dist(X, method = "manhattan"))
+  bmat <- as.matrix(dist(Y, method = "manhattan"))
+  # A_kl
+  Amat <- sweep(amat, 1, rowMeans(amat)) # 1 means to each row
+  Amat <- sweep(Amat, 2, rowMeans(amat)) # 2 means to each col
+  Amat <- Amat + mean(amat)
+  # B_kl
+  Bmat <- sweep(bmat, 1, rowMeans(bmat)) # 1 means to each row
+  Bmat <- sweep(Bmat, 2, rowMeans(bmat)) # 2 means to each col
+  Bmat <- Bmat + mean(bmat)
+  # Distance covariance
+  V_XY <- mean(Amat*Bmat)
+  V_X <- mean(Amat^2)
+  V_Y <- mean(Bmat^2)
+  # Distance correlation
+  R_XY <- V_XY/sqrt(V_X * V_Y)
+  return(R_XY)
+}
+```
+
+###
+
+How should we permute the data? If the data were independent, then pairing observations $(X_i, Y_i)$ would be meaningless: the pair would be as likely as $(X_i, Y_j)$ for any $j=1,\ldots, n$. This gives us a hint for how the data should be permuted: permute the values of the vector $(X_1, \ldots, X_n)$ or $(Y_1, \ldots, Y_n)$ (no need to do both), and recompute the estimate. Run the code below:
+
+```{r dist1, exercise = TRUE, exercise.eval = FALSE}
+K <- 1000
+
+results <- replicate(K, {
+  yvec_perm <- sample(yvec)
+  dist_cor(xvec, yvec_perm)
+})
+
+mean(c(R_XY, results) >= R_XY)
+```
+
+Here we are using a one-sided p-value, because "more extreme values" correspond to values away from zero.
+
+## Exercises
+
+### Exercise 1
+
+We can invert any bootstrap confidence interval, not just the ones based on the Central Limit Theorem. 
+
+For this exercise, you need to repeat the calculations from above but with the **percentile** confidence interval.
+
+I recopied the bootstrapping code. Now you need to compute the confidence interval for different values of the significance level $\alpha$.
+
+```{r perm-ex1, exercise = TRUE, exercise.eval = FALSE, exercise.lines = 25}
+library(tidyverse)
+data <- filter(chickwts, 
+               feed %in% c("soybean", "linseed"))
+n <- nrow(data)
+B <- 500
+
+results <- replicate(B, {
+  indices <- sample(n, n, replace = TRUE)
+  
+  data[indices, ] %>% 
+    group_by(feed) %>% 
+    summarise(mean = mean(weight)) %>% 
+    pull(mean) %>% 
+    diff
+})
+
+# Add your code below
+```
+
+
+```{r perm-ex1-solution}
+alpha_vec <- seq(0.05, 0.5, by = 0.05)
+conf_ints <- matrix(NA, ncol = 3, 
+                    nrow = length(alpha_vec))
+colnames(conf_ints) <- c("alpha", 
+                         "Lower bound",
+                         "Upper bound")
+
+for (i in 1:length(alpha_vec)) {
+  conf_ints[i, ] <- c(alpha_vec[i], 
+                      quantile(results, probs = 0.5*alpha_vec[i]),
+                      quantile(results, probs = 1 - 0.5*alpha_vec[i]))
+}
+
+conf_ints
+```
+
+### Exercise 2
+
+Consider the following $2\times 2$ contingency table, describing gender distribution and whether a student's major is statistics, for a given course:
+
+|                  | Male students | Female students |
+|------------------|:-------------:|:---------------:|
+| Stats major      |        1      |       9         |
+| Non-Stats major  |        11     |       3         |
+
+The null hypothesis is that male and female students are equally likely to have statistics as their major.
+
+Using Fisher's exact test, compute a p-value for this null hypothesis.
+
+```{r perm-ex2, exercise = TRUE, exercise.eval = FALSE}
+# Add your code below
+```
+
+```{r perm-ex2-solution}
+# As our test statistic, we will use the top left cell.
+# Any other cell would work, but this one is easier to use.
+# m: Number of stats major
+# n: Number of non-stats major
+# k: Number of male students
+dhyper(1, m = 10, n = 14, k = 12) + 
+   dhyper(0, m = 10, n = 14, k = 12)
+```
+

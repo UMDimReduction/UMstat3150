@@ -1,0 +1,580 @@
+<!DOCTYPE html>
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+
+<head>
+
+<meta charset="utf-8">
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+<meta name="generator" content="pandoc" />
+
+
+
+<meta name="progressive" content="true" />
+<meta name="allow-skip" content="true" />
+
+<title>Permutation Tests</title>
+
+
+<!-- highlightjs -->
+<style type="text/css">code{white-space: pre;}</style>
+<style type="text/css">
+  pre:not([class]) {
+    background-color: white;
+  }
+</style>
+<script type="text/javascript">
+if (window.hljs) {
+  hljs.configure({languages: []});
+  hljs.initHighlightingOnLoad();
+  if (document.readyState && document.readyState === "complete") {
+    window.setTimeout(function() { hljs.initHighlighting(); }, 0);
+  }
+}
+</script>
+
+<!-- taken from https://github.com/rstudio/rmarkdown/blob/67b7f5fc779e4cfdfd0f021d3d7745b6b6e17149/inst/rmd/h/default.html#L296-L362 -->
+<!-- tabsets -->
+
+<style type="text/css">
+.tabset-dropdown > .nav-tabs {
+  display: inline-table;
+  max-height: 500px;
+  min-height: 44px;
+  overflow-y: auto;
+  background: white;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+}
+
+.tabset-dropdown > .nav-tabs > li.active:before {
+  content: "";
+  font-family: 'Glyphicons Halflings';
+  display: inline-block;
+  padding: 10px;
+  border-right: 1px solid #ddd;
+}
+
+.tabset-dropdown > .nav-tabs.nav-tabs-open > li.active:before {
+  content: "&#xe258;";
+  border: none;
+}
+
+.tabset-dropdown > .nav-tabs.nav-tabs-open:before {
+  content: "";
+  font-family: 'Glyphicons Halflings';
+  display: inline-block;
+  padding: 10px;
+  border-right: 1px solid #ddd;
+}
+
+.tabset-dropdown > .nav-tabs > li.active {
+  display: block;
+}
+
+.tabset-dropdown > .nav-tabs > li > a,
+.tabset-dropdown > .nav-tabs > li > a:focus,
+.tabset-dropdown > .nav-tabs > li > a:hover {
+  border: none;
+  display: inline-block;
+  border-radius: 4px;
+}
+
+.tabset-dropdown > .nav-tabs.nav-tabs-open > li {
+  display: block;
+  float: none;
+}
+
+.tabset-dropdown > .nav-tabs > li {
+  display: none;
+}
+</style>
+
+<script>
+$(document).ready(function () {
+  window.buildTabsets("section-TOC");
+});
+
+$(document).ready(function () {
+  $('.tabset-dropdown > .nav-tabs > li').click(function () {
+    $(this).parent().toggleClass('nav-tabs-open')
+  });
+});
+</script>
+<!-- end tabsets -->
+
+
+
+</head>
+
+<body>
+
+
+
+<div class="pageContent band">
+<div class="bandContent page">
+
+<div class="topics">
+
+<div id="section-welcome" class="section level2">
+<h2>Welcome</h2>
+<p>This is a tutorial on Permutation Tests. It was created for the course STAT3150–Statistical Computing at the University of Manitoba.</p>
+<div id="section-section" class="section level3">
+<h3></h3>
+<p>In this tutorial, we continue our discussion of Permutation Tests. Specifically, we will look at</p>
+<ul>
+<li>how to invert bootstrap confidence intervals to compute p-values</li>
+<li>how Fisher’s exact test is a special case of a permutation test</li>
+<li>how to test for independence using the distance correlation.</li>
+</ul>
+</div>
+</div>
+<div id="section-p-values-from-confidence-intervals" class="section level2">
+<h2>P-values from confidence intervals</h2>
+<div id="section-section-1" class="section level3">
+<h3></h3>
+<p>In class, we discussed how bootstrap (and jackknife) gives us confidence intervals, and that permutation tests allows us compute p-values.</p>
+<p>But actually, confidence intervals can be “inverted” to compute p-values, and therefore bootstrap can also be used to compute p-values.</p>
+<p>The main idea is as follows: a p-value can be characterized as being equal to the <strong>smallest significance level at which we would still reject the null hypothesis</strong>. For example, say we computed a p-value of 0.012. We would reject the null hypothesis for <span class="math inline">\(\alpha = 0.05\)</span>, but we would <em>not</em> reject if <span class="math inline">\(\alpha = 0.01\)</span>. In fact, we would only reject for significance levels <span class="math inline">\(\alpha \geq 0.012\)</span>.</p>
+<p>How does this relate to confidence intervals? They are also constructed using significance levels! Indeed, a 95% confidence correspond to a significance level of <span class="math inline">\(\alpha = 0.05\)</span>. On the other hand, we can reject the null hypothesis <span class="math inline">\(H_0:\theta = \theta_0\)</span> if the value <span class="math inline">\(\theta_0\)</span> is contained in the confidence interval.</p>
+<p>This gives us a way to “invert” confidence intervals and compute a p-value: the p-value is equal to the smallest significance level <span class="math inline">\(\alpha\)</span> such that <span class="math inline">\(\theta_0\)</span> is <strong>not</strong> included in the <span class="math inline">\((1 - \alpha)\)</span>% confidence interval.</p>
+<div class="panel panel-default">
+<div data-label="boot1" class="tutorial-question panel-body">
+<div id="boot1-answer_container" class="shiny-html-output"></div>
+<div id="boot1-message_container" class="shiny-html-output"></div>
+<div id="boot1-action_button_container" class="shiny-html-output"></div>
+<script>if (Tutorial.triggerMathJax) Tutorial.triggerMathJax()</script>
+</div>
+</div>
+</div>
+<div id="section-section-2" class="section level3">
+<h3></h3>
+<p>Let’s go back to the example we saw in class: the dataset <code>chickwts</code> contains weight measurements for 71 chicks that are receiving one of six possible feed. We were interested in comparing the weight distribution for chicks on soybean and linseed feed, respectively.</p>
+<pre class="r"><code># Let&#39;s bootstrap
+library(tidyverse)
+data &lt;- filter(chickwts, 
+               feed %in% c(&quot;soybean&quot;, &quot;linseed&quot;))
+n &lt;- nrow(data)
+B &lt;- 500
+
+results &lt;- replicate(B, {
+  indices &lt;- sample(n, n, replace = TRUE)
+  
+  data[indices, ] %&gt;% 
+    group_by(feed) %&gt;% 
+    summarise(mean = mean(weight)) %&gt;% 
+    pull(mean) %&gt;% 
+    diff
+})
+
+# 95% confidence interval
+soy_vec &lt;- filter(chickwts, feed == &quot;soybean&quot;) %&gt;% 
+  pull(weight)
+lin_vec &lt;- filter(chickwts, feed == &quot;linseed&quot;) %&gt;% 
+  pull(weight)
+
+mu_diff &lt;- mean(soy_vec) - mean(lin_vec)
+se_boot &lt;- sd(results)
+c(mu_diff - 1.96*se_boot, mu_diff + 1.96*se_boot)</code></pre>
+<pre><code>## [1] -13.66218  69.01932</code></pre>
+<p>As we can see, the value <span class="math inline">\(\theta_0 = 0\)</span> for the difference of means is included in the confidence interval.</p>
+<p>If we repeat the construction of the confidence interval for larger values of <span class="math inline">\(\alpha\)</span>, we will reach a point where the lower bound is exactly zero. Let’s check this.</p>
+<pre class="r"><code>alpha_vec &lt;- seq(0.05, 0.5, by = 0.05)
+conf_ints &lt;- matrix(NA, ncol = 3, 
+                    nrow = length(alpha_vec))
+colnames(conf_ints) &lt;- c(&quot;alpha&quot;, 
+                         &quot;Lower bound&quot;,
+                         &quot;Upper bound&quot;)
+
+for (i in 1:length(alpha_vec)) {
+  # Compute critical value
+  z_crit &lt;- qnorm(1 - 0.5*alpha_vec[i])
+  
+  conf_ints[i, ] &lt;- c(alpha_vec[i], 
+                      mu_diff - z_crit*se_boot,
+                      mu_diff + z_crit*se_boot)
+}
+
+conf_ints</code></pre>
+<pre><code>##       alpha Lower bound Upper bound
+##  [1,]  0.05 -13.6614157    69.01856
+##  [2,]  0.10  -7.0150394    62.37218
+##  [3,]  0.15  -2.6843398    58.04148
+##  [4,]  0.20   0.6478068    54.70934
+##  [5,]  0.25   3.4151518    51.94199
+##  [6,]  0.30   5.8178927    49.53925
+##  [7,]  0.35   7.9660106    47.39113
+##  [8,]  0.40   9.9269131    45.43023
+##  [9,]  0.45  11.7451932    43.61195
+## [10,]  0.50  13.4520868    41.90506</code></pre>
+<p>As we can see, somewhere between <span class="math inline">\(\alpha = 0.15\)</span> and <span class="math inline">\(\alpha = 0.20\)</span>, the lower bound of the interval is equal to 0. Which means that the p-value derived from the confidence interval would also be between 0.15 and 0.20.</p>
+<p>In the next module on numerical methods, we will see how we could compute that p-value with more accuracy. But for now, we will content ourselves with this range, which is consistent with what we obtained with the t-test and the permutation test.</p>
+</div>
+</div>
+<div id="section-fishers-exact-test" class="section level2">
+<h2>Fisher’s exact test</h2>
+<div id="section-section-3" class="section level3">
+<h3></h3>
+<p>Fisher developed this exact test to disprove the following theory: a lady in England claimed that she could always tell whether milk or tea was poured in a cup first. Fisher designed the following experiment: he randomly filled four cups with tea first, and four cups with milk first. He then asked the lady to guess which four cups were filled with milk first. The results were as follows:</p>
+<table>
+<thead>
+<tr class="header">
+<th></th>
+<th align="center">Guess Milk</th>
+<th align="center">Guess Tea</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>Actual Milk</td>
+<td align="center">3</td>
+<td align="center">1</td>
+</tr>
+<tr class="even">
+<td>Actual Tea</td>
+<td align="center">1</td>
+<td align="center">3</td>
+</tr>
+</tbody>
+</table>
+<p>Fisher’s null hypothesis was that the lady was guessing randomly.</p>
+<p>Under this null hypothesis, the value in the top left cell (i.e. correct milk guesses) follows a <em>hypergeometric distribution</em>. Therefore, we can calculate the probability that she correctly guessed 3:</p>
+<pre class="r"><code>dhyper(3, m = 4, n = 4, k = 4)</code></pre>
+<pre><code>## [1] 0.2285714</code></pre>
+<p><em>What would be a more extreme value?</em> If she had guessed 4 correctly! Therefore the p-value is the sum of the probability mass function at <span class="math inline">\(x = 3\)</span> and <span class="math inline">\(x = 4\)</span>:</p>
+<pre class="r"><code>dhyper(3, m = 4, n = 4, k = 4) +
+  dhyper(4, m = 4, n = 4, k = 4)</code></pre>
+<pre><code>## [1] 0.2428571</code></pre>
+<p>Given that probability, Fisher concluded there was a lack of evidence that the lady could really tell which was poured first.</p>
+</div>
+<div id="section-section-4" class="section level3">
+<h3></h3>
+<p>More generally, Fisher’s exact test is a test of independence between two factors (e.g. the true liquid poured first and the lady’s guess). An important assumption is that the <strong>row totals</strong> and the <strong>column totals</strong> should be <em>fixed</em> by design. This was the case in Fisher’s experiment: he poured 4 cups of each, and told the lady, so each row and each column in the table above has to sum to 4.</p>
+<p>This assumption is important: it implies that the value of a single cell completely determines the value of the other three cells. Therefore, we can use any of the four cells as our test statistic. For example, if we pick the lower left cell (i.e. wrong milk guesses), we get the same p-value (but note the difference in which values are more extreme!):</p>
+<pre class="r"><code>dhyper(1, m = 4, n = 4, k = 4) +
+  dhyper(0, m = 4, n = 4, k = 4)</code></pre>
+<pre><code>## [1] 0.2428571</code></pre>
+</div>
+<div id="section-section-5" class="section level3">
+<h3></h3>
+<p><em>What is the connection with permutation tests?</em> Under the null hypothesis, the value of any cell follows a hypergeometric distribution. Therefore, we can quantify the likelihood of <em>any</em> permutation of the data that would lead to a valid 2x2 table (i.e. with the correct row and column sums).</p>
+<p>If we permute the data, the frequency of each configuration will converge to the hypergeometric probabilities, and we will obtain the same p-value. Let’s try it out by running the code below:</p>
+<div class="tutorial-exercise" data-label="fisher1" data-caption="Code" data-completion="1" data-diagnostics="1" data-startover="1" data-lines="0">
+<pre class="text"><code>data &lt;- rep(c(&quot;Milk&quot;, &quot;Tea&quot;), each = 4)
+K &lt;- 1000
+
+results &lt;- replicate(K, {
+  data_perm &lt;- sample(data)
+  # Treat first 4 values as if the lady 
+  # had guessed milk
+  sum(data_perm[1:4] == &quot;Milk&quot;)
+})
+
+mean(c(3, results) &gt;= 3)</code></pre>
+<script type="application/json" data-opts-chunk="1">{"fig.width":6.5,"fig.height":4,"fig.retina":2,"fig.align":"default","fig.keep":"high","fig.show":"asis","out.width":624,"warning":true,"error":false,"message":true,"exercise.df_print":"paged","exercise.checker":"NULL"}</script>
+</div>
+<p>As we can see, we get a similar p-value.</p>
+<p>Fisher’s exact test is very much in the same spirit as the permutation tests we discussed in class! But the limitation (read: non-existence) of computational resources back then meant that Fisher couldn’t <em>physically</em> permute the data; instead, he had to compute the probability of each permutation.</p>
+</div>
+</div>
+<div id="section-distance-correlation" class="section level2">
+<h2>Distance correlation</h2>
+<div id="section-section-6" class="section level3">
+<h3></h3>
+<p>This topic is more advanced, and I’ve included it only for your personal interest. <em>You can omit this section.</em></p>
+<p>As we briefly mentioned in class, permutation tests can be used to test for independence. Recall the general idea: suppose we have two variables <span class="math inline">\(X,Y\)</span> (they could also be random vectors), with <span class="math inline">\(F_X,F_Y\)</span> the marginal distributions and <span class="math inline">\(F_{XY}\)</span> the joint distribution. Then independence is equivalent to <span class="math inline">\(F_{XY} = F_XF_Y\)</span>. This means that independence between <span class="math inline">\(X\)</span> and <span class="math inline">\(Y\)</span> corresponds to the following null hypothesis: <span class="math display">\[ H_0: F_{XY} = F_XF_Y.\]</span></p>
+<p>If we assume our data follows a normal distribution, then independence is equivalent to having no correlation. In that special case, we could test for independence by building a correlation test: <span class="math display">\[H_0: \mathrm{Corr}(X, Y) = 0.\]</span></p>
+<p>But in general, independence is stricter than no correlation. For that reason, we need a different test statistic.</p>
+<p>Székely, Rizzo, and Bakirov (2007) introduced the notion of <strong>distance correlation</strong> for exactly that purpose: they were looking for a measure of dependence that would be equal to zero if and only if the variables <span class="math inline">\(X,Y\)</span> are independent. Their definition is valid for random vectors <span class="math inline">\(\mathbf{X},\mathbf{Y}\)</span> of different lengths. But for the purposes of this discussion, we will focus on <span class="math inline">\(X,Y\)</span> random variables.</p>
+</div>
+<div id="section-section-7" class="section level3">
+<h3></h3>
+<p>Here are the definitions. Let <span class="math inline">\((X_1, Y_1), \ldots, (X_n, Y_n)\)</span> be a sample of size <span class="math inline">\(n\)</span> (so both variables are measured on the same experimental unit). Define two <span class="math inline">\(n\times n\)</span> matrices: <span class="math display">\[a_{k\ell} = \lvert X_k - X_\ell\rvert, \qquad b_{k\ell} = \lvert Y_k - Y_\ell\rvert.\]</span> Next, create two new <span class="math inline">\(n\times n\)</span> matrices from the previous ones by subtracting the row means, the column means, and adding back the overall mean: <span class="math display">\[A_{k\ell} = a_{k\ell} - \bar{a}_{k\cdot} - \bar{a}_{\cdot\ell} + \bar{a}_{\cdot\cdot},\]</span> <span class="math display">\[B_{k\ell} = b_{k\ell} - \bar{b}_{k\cdot} - \bar{b}_{\cdot\ell} + \bar{b}_{\cdot\cdot}.\]</span> Next, define the <strong>empirical distance covariance</strong> as follows: <span class="math display">\[V(X, Y) = \frac{1}{n^2}\sum_{k=1}^n \sum_{\ell = 1}^n A_{k\ell}B_{k\ell},\]</span> <span class="math display">\[V(X) = \frac{1}{n^2}\sum_{k=1}^n \sum_{\ell = 1}^n A_{k\ell}^2,\]</span> <span class="math display">\[V(Y) = \frac{1}{n^2}\sum_{k=1}^n \sum_{\ell = 1}^n B_{k\ell}^2.\]</span> Finally, the <strong>empirical distance correlation</strong> is defined as: <span class="math display">\[R(X, Y) = \frac{V(X, Y)}{\sqrt{V(X)V(Y)}},\]</span> as long as the denominator is nonzero. Otherwise, we set <span class="math inline">\(R(X, Y) = 0\)</span>.</p>
+</div>
+<div id="section-section-8" class="section level3">
+<h3></h3>
+<p>That was a long definition… Let see how we can implement this in <code>R</code>. First, we will generate data and compute the matrices <span class="math inline">\(a_{k\ell}\)</span> and <span class="math inline">\(b_{k\ell}\)</span>:</p>
+<pre class="r"><code># Generate data
+n &lt;- 20
+xvec &lt;- runif(n)
+yvec &lt;- rexp(n)
+
+# Compute matrices
+amat &lt;- as.matrix(dist(xvec, method = &quot;manhattan&quot;))
+bmat &lt;- as.matrix(dist(yvec, method = &quot;manhattan&quot;))</code></pre>
+<p>In the code above, the function <code>dist</code> can compute several types of distances. We use the <code>manhattan</code> distance, as it corresponds to the absolute value distance above. Finally, we use <code>as.matrix</code> to obtain the matrix of pairwise distances.</p>
+<p>Next, we can use the function <code>sweep</code>, which “sweeps out”, or subtracts, a summary statistic to all rows and all columns:</p>
+<pre class="r"><code># Note: row means and column means are equal
+all.equal(rowMeans(amat), colMeans(amat))</code></pre>
+<pre><code>## [1] TRUE</code></pre>
+<pre class="r"><code># A_kl
+Amat &lt;- sweep(amat, 1, rowMeans(amat)) # 1 means to each row
+Amat &lt;- sweep(Amat, 2, rowMeans(amat)) # 2 means to each col
+Amat &lt;- Amat + mean(amat)
+# B_kl
+Bmat &lt;- sweep(bmat, 1, rowMeans(bmat)) # 1 means to each row
+Bmat &lt;- sweep(Bmat, 2, rowMeans(bmat)) # 2 means to each col
+Bmat &lt;- Bmat + mean(bmat)</code></pre>
+<p>Finally, we can compute the distance covariances and the distance correlation:</p>
+<pre class="r"><code>V_XY &lt;- mean(Amat*Bmat)
+V_X &lt;- mean(Amat^2)
+V_Y &lt;- mean(Bmat^2)
+
+R_XY &lt;- V_XY/sqrt(V_X * V_Y)
+R_XY</code></pre>
+<pre><code>## [1] 0.1201137</code></pre>
+<p>This is our test statistic. We can put all these computations inside a function, which we’ll use with a permutation test:</p>
+<pre class="r"><code>dist_cor &lt;- function(X, Y) {
+  # Compute matrices
+  amat &lt;- as.matrix(dist(X, method = &quot;manhattan&quot;))
+  bmat &lt;- as.matrix(dist(Y, method = &quot;manhattan&quot;))
+  # A_kl
+  Amat &lt;- sweep(amat, 1, rowMeans(amat)) # 1 means to each row
+  Amat &lt;- sweep(Amat, 2, rowMeans(amat)) # 2 means to each col
+  Amat &lt;- Amat + mean(amat)
+  # B_kl
+  Bmat &lt;- sweep(bmat, 1, rowMeans(bmat)) # 1 means to each row
+  Bmat &lt;- sweep(Bmat, 2, rowMeans(bmat)) # 2 means to each col
+  Bmat &lt;- Bmat + mean(bmat)
+  # Distance covariance
+  V_XY &lt;- mean(Amat*Bmat)
+  V_X &lt;- mean(Amat^2)
+  V_Y &lt;- mean(Bmat^2)
+  # Distance correlation
+  R_XY &lt;- V_XY/sqrt(V_X * V_Y)
+  return(R_XY)
+}</code></pre>
+</div>
+<div id="section-section-9" class="section level3">
+<h3></h3>
+<p>How should we permute the data? If the data were independent, then pairing observations <span class="math inline">\((X_i, Y_i)\)</span> would be meaningless: the pair would be as likely as <span class="math inline">\((X_i, Y_j)\)</span> for any <span class="math inline">\(j=1,\ldots, n\)</span>. This gives us a hint for how the data should be permuted: permute the values of the vector <span class="math inline">\((X_1, \ldots, X_n)\)</span> or <span class="math inline">\((Y_1, \ldots, Y_n)\)</span> (no need to do both), and recompute the estimate. Run the code below:</p>
+<div class="tutorial-exercise" data-label="dist1" data-caption="Code" data-completion="1" data-diagnostics="1" data-startover="1" data-lines="0">
+<pre class="text"><code>K &lt;- 1000
+
+results &lt;- replicate(K, {
+  yvec_perm &lt;- sample(yvec)
+  dist_cor(xvec, yvec_perm)
+})
+
+mean(c(R_XY, results) &gt;= R_XY)</code></pre>
+<script type="application/json" data-opts-chunk="1">{"fig.width":6.5,"fig.height":4,"fig.retina":2,"fig.align":"default","fig.keep":"high","fig.show":"asis","out.width":624,"warning":true,"error":false,"message":true,"exercise.df_print":"paged","exercise.checker":"NULL"}</script>
+</div>
+<p>Here we are using a one-sided p-value, because “more extreme values” correspond to values away from zero.</p>
+</div>
+</div>
+<div id="section-exercises" class="section level2">
+<h2>Exercises</h2>
+<div id="section-exercise-1" class="section level3">
+<h3>Exercise 1</h3>
+<p>We can invert any bootstrap confidence interval, not just the ones based on the Central Limit Theorem.</p>
+<p>For this exercise, you need to repeat the calculations from above but with the <strong>percentile</strong> confidence interval.</p>
+<p>I recopied the bootstrapping code. Now you need to compute the confidence interval for different values of the significance level <span class="math inline">\(\alpha\)</span>.</p>
+<div class="tutorial-exercise" data-label="perm-ex1" data-caption="Code" data-completion="1" data-diagnostics="1" data-startover="1" data-lines="25">
+<pre class="text"><code>library(tidyverse)
+data &lt;- filter(chickwts, 
+               feed %in% c(&quot;soybean&quot;, &quot;linseed&quot;))
+n &lt;- nrow(data)
+B &lt;- 500
+
+results &lt;- replicate(B, {
+  indices &lt;- sample(n, n, replace = TRUE)
+  
+  data[indices, ] %&gt;% 
+    group_by(feed) %&gt;% 
+    summarise(mean = mean(weight)) %&gt;% 
+    pull(mean) %&gt;% 
+    diff
+})
+
+# Add your code below</code></pre>
+<script type="application/json" data-opts-chunk="1">{"fig.width":6.5,"fig.height":4,"fig.retina":2,"fig.align":"default","fig.keep":"high","fig.show":"asis","out.width":624,"warning":true,"error":false,"message":true,"exercise.df_print":"paged","exercise.checker":"NULL"}</script>
+</div>
+<div class="tutorial-exercise-support" data-label="perm-ex1-solution" data-caption="Code" data-completion="1" data-diagnostics="1" data-startover="1" data-lines="0">
+<pre class="text"><code>alpha_vec &lt;- seq(0.05, 0.5, by = 0.05)
+conf_ints &lt;- matrix(NA, ncol = 3, 
+                    nrow = length(alpha_vec))
+colnames(conf_ints) &lt;- c(&quot;alpha&quot;, 
+                         &quot;Lower bound&quot;,
+                         &quot;Upper bound&quot;)
+
+for (i in 1:length(alpha_vec)) {
+  conf_ints[i, ] &lt;- c(alpha_vec[i], 
+                      quantile(results, probs = 0.5*alpha_vec[i]),
+                      quantile(results, probs = 1 - 0.5*alpha_vec[i]))
+}
+
+conf_ints</code></pre>
+</div>
+</div>
+<div id="section-exercise-2" class="section level3">
+<h3>Exercise 2</h3>
+<p>Consider the following <span class="math inline">\(2\times 2\)</span> contingency table, describing gender distribution and whether a student’s major is statistics, for a given course:</p>
+<table>
+<thead>
+<tr class="header">
+<th></th>
+<th align="center">Male students</th>
+<th align="center">Female students</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>Stats major</td>
+<td align="center">1</td>
+<td align="center">9</td>
+</tr>
+<tr class="even">
+<td>Non-Stats major</td>
+<td align="center">11</td>
+<td align="center">3</td>
+</tr>
+</tbody>
+</table>
+<p>The null hypothesis is that male and female students are equally likely to have statistics as their major.</p>
+<p>Using Fisher’s exact test, compute a p-value for this null hypothesis.</p>
+<div class="tutorial-exercise" data-label="perm-ex2" data-caption="Code" data-completion="1" data-diagnostics="1" data-startover="1" data-lines="0">
+<pre class="text"><code># Add your code below</code></pre>
+<script type="application/json" data-opts-chunk="1">{"fig.width":6.5,"fig.height":4,"fig.retina":2,"fig.align":"default","fig.keep":"high","fig.show":"asis","out.width":624,"warning":true,"error":false,"message":true,"exercise.df_print":"paged","exercise.checker":"NULL"}</script>
+</div>
+<div class="tutorial-exercise-support" data-label="perm-ex2-solution" data-caption="Code" data-completion="1" data-diagnostics="1" data-startover="1" data-lines="0">
+<pre class="text"><code># As our test statistic, we will use the top left cell.
+# Any other cell would work, but this one is easier to use.
+# m: Number of stats major
+# n: Number of non-stats major
+# k: Number of male students
+dhyper(1, m = 10, n = 14, k = 12) + 
+   dhyper(0, m = 10, n = 14, k = 12)</code></pre>
+</div>
+
+<script type="application/shiny-prerendered" data-context="server-start">
+library(learnr)
+knitr::opts_chunk$set(echo = FALSE)
+library(tidyverse)
+options("dplyr.summarise.inform" = FALSE)
+# Setup code
+dist_cor <- function(X, Y) {
+  # Compute matrices
+  amat <- as.matrix(dist(X, method = "manhattan"))
+  bmat <- as.matrix(dist(Y, method = "manhattan"))
+  # A_kl
+  Amat <- sweep(amat, 1, rowMeans(amat)) # 1 means to each row
+  Amat <- sweep(Amat, 2, rowMeans(amat)) # 2 means to each col
+  Amat <- Amat + mean(amat)
+  # B_kl
+  Bmat <- sweep(bmat, 1, rowMeans(bmat)) # 1 means to each row
+  Bmat <- sweep(Bmat, 2, rowMeans(bmat)) # 2 means to each col
+  Bmat <- Bmat + mean(bmat)
+  # Distance covariance
+  V_XY <- mean(Amat*Bmat)
+  V_X <- mean(Amat^2)
+  V_Y <- mean(Bmat^2)
+  # Distance correlation
+  R_XY <- V_XY/sqrt(V_X * V_Y)
+  return(R_XY)
+}
+</script>
+ 
+<script type="application/shiny-prerendered" data-context="server">
+learnr:::register_http_handlers(session, metadata = NULL)
+</script>
+ 
+<script type="application/shiny-prerendered" data-context="server">
+session$onSessionEnded(function() {
+        learnr:::session_stop_event(session)
+      })
+</script>
+ 
+<script type="application/shiny-prerendered" data-context="server">
+learnr:::question_prerendered_chunk(structure(list(type = "learnr_radio", label = "boot1", question = structure("What happens to the length of a confidence interval when you <strong>increase<\u002fstrong> the significance level?", html = TRUE, class = c("html", "character")), answers = list(structure(list(id = "lnr_ans_d157402",     option = "It becomes smaller.", value = "It becomes smaller.",     label = structure("It becomes smaller.", html = TRUE, class = c("html",     "character")), correct = TRUE, message = NULL), class = c("tutorial_question_answer", "tutorial_quiz_answer")), structure(list(id = "lnr_ans_8e4a120",     option = "It becomes wider.", value = "It becomes wider.",     label = structure("It becomes wider.", html = TRUE, class = c("html",     "character")), correct = FALSE, message = NULL), class = c("tutorial_question_answer", "tutorial_quiz_answer"))), button_labels = list(submit = structure("Submit Answer", html = TRUE, class = c("html", "character")), try_again = structure("Try Again", html = TRUE, class = c("html", "character"))), messages = list(correct = structure("Correct!", html = TRUE, class = c("html", "character")), try_again = structure("Incorrect", html = TRUE, class = c("html", "character")), incorrect = structure("Incorrect", html = TRUE, class = c("html", "character")), message = NULL, post_message = NULL), ids = list(    answer = "boot1-answer", question = "boot1"), loading = structure("<strong>Loading:<\u002fstrong> \nWhat happens to the length of a confidence interval when you <strong>increase<\u002fstrong> the significance level?\n<br/><br/><br/>", html = TRUE, class = c("html", "character")), random_answer_order = FALSE, allow_retry = FALSE,     seed = 702722197.672769, options = list()), class = c("learnr_radio", "tutorial_question")))
+</script>
+ 
+<script type="application/shiny-prerendered" data-context="server">
+`tutorial-exercise-fisher1-result` <- learnr:::setup_exercise_handler(reactive(req(input$`tutorial-exercise-fisher1-code-editor`)), session)
+output$`tutorial-exercise-fisher1-output` <- renderUI({
+  `tutorial-exercise-fisher1-result`()
+})
+</script>
+ 
+<script type="application/shiny-prerendered" data-context="server">
+`tutorial-exercise-dist1-result` <- learnr:::setup_exercise_handler(reactive(req(input$`tutorial-exercise-dist1-code-editor`)), session)
+output$`tutorial-exercise-dist1-output` <- renderUI({
+  `tutorial-exercise-dist1-result`()
+})
+</script>
+ 
+<script type="application/shiny-prerendered" data-context="server">
+`tutorial-exercise-perm-ex1-result` <- learnr:::setup_exercise_handler(reactive(req(input$`tutorial-exercise-perm-ex1-code-editor`)), session)
+output$`tutorial-exercise-perm-ex1-output` <- renderUI({
+  `tutorial-exercise-perm-ex1-result`()
+})
+</script>
+ 
+<script type="application/shiny-prerendered" data-context="server">
+`tutorial-exercise-perm-ex2-result` <- learnr:::setup_exercise_handler(reactive(req(input$`tutorial-exercise-perm-ex2-code-editor`)), session)
+output$`tutorial-exercise-perm-ex2-output` <- renderUI({
+  `tutorial-exercise-perm-ex2-result`()
+})
+</script>
+ <!--html_preserve-->
+<script type="application/shiny-prerendered" data-context="dependencies">
+{"type":"list","attributes":{},"value":[{"type":"list","attributes":{"names":{"type":"character","attributes":{},"value":["name","version","src","meta","script","stylesheet","head","attachment","package","all_files","pkgVersion"]},"class":{"type":"character","attributes":{},"value":["html_dependency"]}},"value":[{"type":"character","attributes":{},"value":["header-attrs"]},{"type":"character","attributes":{},"value":["2.5"]},{"type":"list","attributes":{"names":{"type":"character","attributes":{},"value":["file"]}},"value":[{"type":"character","attributes":{},"value":["rmd/h/pandoc"]}]},{"type":"NULL"},{"type":"character","attributes":{},"value":["header-attrs.js"]},{"type":"NULL"},{"type":"NULL"},{"type":"NULL"},{"type":"character","attributes":{},"value":["rmarkdown"]},{"type":"logical","attributes":{},"value":[true]},{"type":"character","attributes":{},"value":["2.5"]}]},{"type":"list","attributes":{"names":{"type":"character","attributes":{},"value":["name","version","src","meta","script","stylesheet","head","attachment","package","all_files","pkgVersion"]},"class":{"type":"character","attributes":{},"value":["html_dependency"]}},"value":[{"type":"character","attributes":{},"value":["jquery"]},{"type":"character","attributes":{},"value":["1.11.3"]},{"type":"list","attributes":{"names":{"type":"character","attributes":{},"value":["file"]}},"value":[{"type":"character","attributes":{},"value":["rmd/h/jquery"]}]},{"type":"NULL"},{"type":"character","attributes":{},"value":["jquery.min.js"]},{"type":"NULL"},{"type":"NULL"},{"type":"NULL"},{"type":"character","attributes":{},"value":["rmarkdown"]},{"type":"logical","attributes":{},"value":[true]},{"type":"character","attributes":{},"value":["2.5"]}]},{"type":"list","attributes":{"names":{"type":"character","attributes":{},"value":["name","version","src","meta","script","stylesheet","head","attachment","package","all_files","pkgVersion"]},"class":{"type":"character","attributes":{},"value":["html_dependency"]}},"value":[{"type":"character","attributes":{},"value":["bootstrap"]},{"type":"character","attributes":{},"value":["3.3.5"]},{"type":"list","attributes":{"names":{"type":"character","attributes":{},"value":["file"]}},"value":[{"type":"character","attributes":{},"value":["rmd/h/bootstrap"]}]},{"type":"list","attributes":{"names":{"type":"character","attributes":{},"value":["viewport"]}},"value":[{"type":"character","attributes":{},"value":["width=device-width, initial-scale=1"]}]},{"type":"character","attributes":{},"value":["js/bootstrap.min.js","shim/html5shiv.min.js","shim/respond.min.js"]},{"type":"character","attributes":{},"value":["css/cerulean.min.css"]},{"type":"NULL"},{"type":"NULL"},{"type":"character","attributes":{},"value":["rmarkdown"]},{"type":"logical","attributes":{},"value":[true]},{"type":"character","attributes":{},"value":["2.5"]}]},{"type":"list","attributes":{"names":{"type":"character","attributes":{},"value":["name","version","src","meta","script","stylesheet","head","attachment","package","all_files","pkgVersion"]},"class":{"type":"character","attributes":{},"value":["html_dependency"]}},"value":[{"type":"character","attributes":{},"value":["pagedtable"]},{"type":"character","attributes":{},"value":["1.1"]},{"type":"list","attributes":{"names":{"type":"character","attributes":{},"value":["file"]}},"value":[{"type":"character","attributes":{},"value":["rmd/h/pagedtable-1.1"]}]},{"type":"NULL"},{"type":"character","attributes":{},"value":["js/pagedtable.js"]},{"type":"character","attributes":{},"value":["css/pagedtable.css"]},{"type":"NULL"},{"type":"NULL"},{"type":"character","attributes":{},"value":["rmarkdown"]},{"type":"logical","attributes":{},"value":[true]},{"type":"character","attributes":{},"value":["2.5"]}]},{"type":"list","attributes":{"names":{"type":"character","attributes":{},"value":["name","version","src","meta","script","stylesheet","head","attachment","package","all_files","pkgVersion"]},"class":{"type":"character","attributes":{},"value":["html_dependency"]}},"value":[{"type":"character","attributes":{},"value":["highlightjs"]},{"type":"character","attributes":{},"value":["9.12.0"]},{"type":"list","attributes":{"names":{"type":"character","attributes":{},"value":["file"]}},"value":[{"type":"character","attributes":{},"value":["rmd/h/highlightjs"]}]},{"type":"NULL"},{"type":"character","attributes":{},"value":["highlight.js"]},{"type":"character","attributes":{},"value":["textmate.css"]},{"type":"NULL"},{"type":"NULL"},{"type":"character","attributes":{},"value":["rmarkdown"]},{"type":"logical","attributes":{},"value":[true]},{"type":"character","attributes":{},"value":["2.5"]}]},{"type":"list","attributes":{"names":{"type":"character","attributes":{},"value":["name","version","src","meta","script","stylesheet","head","attachment","package","all_files","pkgVersion"]},"class":{"type":"character","attributes":{},"value":["html_dependency"]}},"value":[{"type":"character","attributes":{},"value":["tutorial"]},{"type":"character","attributes":{},"value":["0.10.1"]},{"type":"list","attributes":{"names":{"type":"character","attributes":{},"value":["file"]}},"value":[{"type":"character","attributes":{},"value":["lib/tutorial"]}]},{"type":"NULL"},{"type":"character","attributes":{},"value":["tutorial.js"]},{"type":"character","attributes":{},"value":["tutorial.css"]},{"type":"NULL"},{"type":"NULL"},{"type":"character","attributes":{},"value":["learnr"]},{"type":"logical","attributes":{},"value":[true]},{"type":"character","attributes":{},"value":["0.10.1"]}]},{"type":"list","attributes":{"names":{"type":"character","attributes":{},"value":["name","version","src","meta","script","stylesheet","head","attachment","package","all_files","pkgVersion"]},"class":{"type":"character","attributes":{},"value":["html_dependency"]}},"value":[{"type":"character","attributes":{},"value":["tutorial-autocompletion"]},{"type":"character","attributes":{},"value":["0.10.1"]},{"type":"list","attributes":{"names":{"type":"character","attributes":{},"value":["file"]}},"value":[{"type":"character","attributes":{},"value":["lib/tutorial"]}]},{"type":"NULL"},{"type":"character","attributes":{},"value":["tutorial-autocompletion.js"]},{"type":"NULL"},{"type":"NULL"},{"type":"NULL"},{"type":"character","attributes":{},"value":["learnr"]},{"type":"logical","attributes":{},"value":[true]},{"type":"character","attributes":{},"value":["0.10.1"]}]},{"type":"list","attributes":{"names":{"type":"character","attributes":{},"value":["name","version","src","meta","script","stylesheet","head","attachment","package","all_files","pkgVersion"]},"class":{"type":"character","attributes":{},"value":["html_dependency"]}},"value":[{"type":"character","attributes":{},"value":["tutorial-diagnostics"]},{"type":"character","attributes":{},"value":["0.10.1"]},{"type":"list","attributes":{"names":{"type":"character","attributes":{},"value":["file"]}},"value":[{"type":"character","attributes":{},"value":["lib/tutorial"]}]},{"type":"NULL"},{"type":"character","attributes":{},"value":["tutorial-diagnostics.js"]},{"type":"NULL"},{"type":"NULL"},{"type":"NULL"},{"type":"character","attributes":{},"value":["learnr"]},{"type":"logical","attributes":{},"value":[true]},{"type":"character","attributes":{},"value":["0.10.1"]}]},{"type":"list","attributes":{"names":{"type":"character","attributes":{},"value":["name","version","src","meta","script","stylesheet","head","attachment","package","all_files","pkgVersion"]},"class":{"type":"character","attributes":{},"value":["html_dependency"]}},"value":[{"type":"character","attributes":{},"value":["tutorial-format"]},{"type":"character","attributes":{},"value":["0.10.1"]},{"type":"list","attributes":{"names":{"type":"character","attributes":{},"value":["file"]}},"value":[{"type":"character","attributes":{},"value":["rmarkdown/templates/tutorial/resources"]}]},{"type":"NULL"},{"type":"character","attributes":{},"value":["tutorial-format.js"]},{"type":"character","attributes":{},"value":["tutorial-format.css","rstudio-theme.css"]},{"type":"NULL"},{"type":"NULL"},{"type":"character","attributes":{},"value":["learnr"]},{"type":"logical","attributes":{},"value":[true]},{"type":"character","attributes":{},"value":["0.10.1"]}]},{"type":"list","attributes":{"names":{"type":"character","attributes":{},"value":["name","version","src","meta","script","stylesheet","head","attachment","package","all_files","pkgVersion"]},"class":{"type":"character","attributes":{},"value":["html_dependency"]}},"value":[{"type":"character","attributes":{},"value":["jquery"]},{"type":"character","attributes":{},"value":["1.11.3"]},{"type":"list","attributes":{"names":{"type":"character","attributes":{},"value":["file"]}},"value":[{"type":"character","attributes":{},"value":["rmd/h/jquery"]}]},{"type":"NULL"},{"type":"character","attributes":{},"value":["jquery.min.js"]},{"type":"NULL"},{"type":"NULL"},{"type":"NULL"},{"type":"character","attributes":{},"value":["rmarkdown"]},{"type":"logical","attributes":{},"value":[true]},{"type":"character","attributes":{},"value":["2.5"]}]},{"type":"list","attributes":{"names":{"type":"character","attributes":{},"value":["name","version","src","meta","script","stylesheet","head","attachment","package","all_files","pkgVersion"]},"class":{"type":"character","attributes":{},"value":["html_dependency"]}},"value":[{"type":"character","attributes":{},"value":["navigation"]},{"type":"character","attributes":{},"value":["1.1"]},{"type":"list","attributes":{"names":{"type":"character","attributes":{},"value":["file"]}},"value":[{"type":"character","attributes":{},"value":["rmd/h/navigation-1.1"]}]},{"type":"NULL"},{"type":"character","attributes":{},"value":["tabsets.js"]},{"type":"NULL"},{"type":"NULL"},{"type":"NULL"},{"type":"character","attributes":{},"value":["rmarkdown"]},{"type":"logical","attributes":{},"value":[true]},{"type":"character","attributes":{},"value":["2.5"]}]},{"type":"list","attributes":{"names":{"type":"character","attributes":{},"value":["name","version","src","meta","script","stylesheet","head","attachment","package","all_files","pkgVersion"]},"class":{"type":"character","attributes":{},"value":["html_dependency"]}},"value":[{"type":"character","attributes":{},"value":["highlightjs"]},{"type":"character","attributes":{},"value":["9.12.0"]},{"type":"list","attributes":{"names":{"type":"character","attributes":{},"value":["file"]}},"value":[{"type":"character","attributes":{},"value":["rmd/h/highlightjs"]}]},{"type":"NULL"},{"type":"character","attributes":{},"value":["highlight.js"]},{"type":"character","attributes":{},"value":["default.css"]},{"type":"NULL"},{"type":"NULL"},{"type":"character","attributes":{},"value":["rmarkdown"]},{"type":"logical","attributes":{},"value":[true]},{"type":"character","attributes":{},"value":["2.5"]}]},{"type":"list","attributes":{"names":{"type":"character","attributes":{},"value":["name","version","src","meta","script","stylesheet","head","attachment","package","all_files","pkgVersion"]},"class":{"type":"character","attributes":{},"value":["html_dependency"]}},"value":[{"type":"character","attributes":{},"value":["anchor-sections"]},{"type":"character","attributes":{},"value":["1.0"]},{"type":"list","attributes":{"names":{"type":"character","attributes":{},"value":["file"]}},"value":[{"type":"character","attributes":{},"value":["rmd/h/anchor-sections"]}]},{"type":"NULL"},{"type":"character","attributes":{},"value":["anchor-sections.js"]},{"type":"character","attributes":{},"value":["anchor-sections.css"]},{"type":"NULL"},{"type":"NULL"},{"type":"character","attributes":{},"value":["rmarkdown"]},{"type":"logical","attributes":{},"value":[true]},{"type":"character","attributes":{},"value":["2.5"]}]},{"type":"list","attributes":{"names":{"type":"character","attributes":{},"value":["name","version","src","meta","script","stylesheet","head","attachment","package","all_files","pkgVersion"]},"class":{"type":"character","attributes":{},"value":["html_dependency"]}},"value":[{"type":"character","attributes":{},"value":["jquery"]},{"type":"character","attributes":{},"value":["1.11.3"]},{"type":"list","attributes":{"names":{"type":"character","attributes":{},"value":["file"]}},"value":[{"type":"character","attributes":{},"value":["rmd/h/jquery"]}]},{"type":"NULL"},{"type":"character","attributes":{},"value":["jquery.min.js"]},{"type":"NULL"},{"type":"NULL"},{"type":"NULL"},{"type":"character","attributes":{},"value":["rmarkdown"]},{"type":"logical","attributes":{},"value":[true]},{"type":"character","attributes":{},"value":["2.5"]}]},{"type":"list","attributes":{"names":{"type":"character","attributes":{},"value":["name","version","src","meta","script","stylesheet","head","attachment","package","all_files","pkgVersion"]},"class":{"type":"character","attributes":{},"value":["html_dependency"]}},"value":[{"type":"character","attributes":{},"value":["font-awesome"]},{"type":"character","attributes":{},"value":["5.1.0"]},{"type":"list","attributes":{"names":{"type":"character","attributes":{},"value":["file"]}},"value":[{"type":"character","attributes":{},"value":["rmd/h/fontawesome"]}]},{"type":"NULL"},{"type":"NULL"},{"type":"character","attributes":{},"value":["css/all.css","css/v4-shims.css"]},{"type":"NULL"},{"type":"NULL"},{"type":"character","attributes":{},"value":["rmarkdown"]},{"type":"logical","attributes":{},"value":[true]},{"type":"character","attributes":{},"value":["2.5"]}]},{"type":"list","attributes":{"names":{"type":"character","attributes":{},"value":["name","version","src","meta","script","stylesheet","head","attachment","package","all_files","pkgVersion"]},"class":{"type":"character","attributes":{},"value":["html_dependency"]}},"value":[{"type":"character","attributes":{},"value":["bootbox"]},{"type":"character","attributes":{},"value":["4.4.0"]},{"type":"list","attributes":{"names":{"type":"character","attributes":{},"value":["file"]}},"value":[{"type":"character","attributes":{},"value":["lib/bootbox"]}]},{"type":"NULL"},{"type":"character","attributes":{},"value":["bootbox.min.js"]},{"type":"NULL"},{"type":"NULL"},{"type":"NULL"},{"type":"character","attributes":{},"value":["learnr"]},{"type":"logical","attributes":{},"value":[true]},{"type":"character","attributes":{},"value":["0.10.1"]}]},{"type":"list","attributes":{"names":{"type":"character","attributes":{},"value":["name","version","src","meta","script","stylesheet","head","attachment","package","all_files","pkgVersion"]},"class":{"type":"character","attributes":{},"value":["html_dependency"]}},"value":[{"type":"character","attributes":{},"value":["idb-keyvalue"]},{"type":"character","attributes":{},"value":["3.2.0"]},{"type":"list","attributes":{"names":{"type":"character","attributes":{},"value":["file"]}},"value":[{"type":"character","attributes":{},"value":["lib/idb-keyval"]}]},{"type":"NULL"},{"type":"character","attributes":{},"value":["idb-keyval-iife-compat.min.js"]},{"type":"NULL"},{"type":"NULL"},{"type":"NULL"},{"type":"character","attributes":{},"value":["learnr"]},{"type":"logical","attributes":{},"value":[false]},{"type":"character","attributes":{},"value":["0.10.1"]}]},{"type":"list","attributes":{"names":{"type":"character","attributes":{},"value":["name","version","src","meta","script","stylesheet","head","attachment","package","all_files","pkgVersion"]},"class":{"type":"character","attributes":{},"value":["html_dependency"]}},"value":[{"type":"character","attributes":{},"value":["tutorial"]},{"type":"character","attributes":{},"value":["0.10.1"]},{"type":"list","attributes":{"names":{"type":"character","attributes":{},"value":["file"]}},"value":[{"type":"character","attributes":{},"value":["lib/tutorial"]}]},{"type":"NULL"},{"type":"character","attributes":{},"value":["tutorial.js"]},{"type":"character","attributes":{},"value":["tutorial.css"]},{"type":"NULL"},{"type":"NULL"},{"type":"character","attributes":{},"value":["learnr"]},{"type":"logical","attributes":{},"value":[true]},{"type":"character","attributes":{},"value":["0.10.1"]}]},{"type":"list","attributes":{"names":{"type":"character","attributes":{},"value":["name","version","src","meta","script","stylesheet","head","attachment","package","all_files","pkgVersion"]},"class":{"type":"character","attributes":{},"value":["html_dependency"]}},"value":[{"type":"character","attributes":{},"value":["tutorial-autocompletion"]},{"type":"character","attributes":{},"value":["0.10.1"]},{"type":"list","attributes":{"names":{"type":"character","attributes":{},"value":["file"]}},"value":[{"type":"character","attributes":{},"value":["lib/tutorial"]}]},{"type":"NULL"},{"type":"character","attributes":{},"value":["tutorial-autocompletion.js"]},{"type":"NULL"},{"type":"NULL"},{"type":"NULL"},{"type":"character","attributes":{},"value":["learnr"]},{"type":"logical","attributes":{},"value":[true]},{"type":"character","attributes":{},"value":["0.10.1"]}]},{"type":"list","attributes":{"names":{"type":"character","attributes":{},"value":["name","version","src","meta","script","stylesheet","head","attachment","package","all_files","pkgVersion"]},"class":{"type":"character","attributes":{},"value":["html_dependency"]}},"value":[{"type":"character","attributes":{},"value":["tutorial-diagnostics"]},{"type":"character","attributes":{},"value":["0.10.1"]},{"type":"list","attributes":{"names":{"type":"character","attributes":{},"value":["file"]}},"value":[{"type":"character","attributes":{},"value":["lib/tutorial"]}]},{"type":"NULL"},{"type":"character","attributes":{},"value":["tutorial-diagnostics.js"]},{"type":"NULL"},{"type":"NULL"},{"type":"NULL"},{"type":"character","attributes":{},"value":["learnr"]},{"type":"logical","attributes":{},"value":[true]},{"type":"character","attributes":{},"value":["0.10.1"]}]},{"type":"list","attributes":{"names":{"type":"character","attributes":{},"value":["name","version","src","meta","script","stylesheet","head","attachment","package","all_files","pkgVersion"]},"class":{"type":"character","attributes":{},"value":["html_dependency"]}},"value":[{"type":"character","attributes":{},"value":["ace"]},{"type":"character","attributes":{},"value":["1.2.6"]},{"type":"list","attributes":{"names":{"type":"character","attributes":{},"value":["file"]}},"value":[{"type":"character","attributes":{},"value":["lib/ace"]}]},{"type":"NULL"},{"type":"character","attributes":{},"value":["ace.js"]},{"type":"NULL"},{"type":"NULL"},{"type":"NULL"},{"type":"character","attributes":{},"value":["learnr"]},{"type":"logical","attributes":{},"value":[true]},{"type":"character","attributes":{},"value":["0.10.1"]}]},{"type":"list","attributes":{"names":{"type":"character","attributes":{},"value":["name","version","src","meta","script","stylesheet","head","attachment","package","all_files","pkgVersion"]},"class":{"type":"character","attributes":{},"value":["html_dependency"]}},"value":[{"type":"character","attributes":{},"value":["clipboardjs"]},{"type":"character","attributes":{},"value":["1.5.15"]},{"type":"list","attributes":{"names":{"type":"character","attributes":{},"value":["file"]}},"value":[{"type":"character","attributes":{},"value":["lib/clipboardjs"]}]},{"type":"NULL"},{"type":"character","attributes":{},"value":["clipboard.min.js"]},{"type":"NULL"},{"type":"NULL"},{"type":"NULL"},{"type":"character","attributes":{},"value":["learnr"]},{"type":"logical","attributes":{},"value":[true]},{"type":"character","attributes":{},"value":["0.10.1"]}]},{"type":"list","attributes":{"names":{"type":"character","attributes":{},"value":["name","version","src","meta","script","stylesheet","head","attachment","package","all_files","pkgVersion"]},"class":{"type":"character","attributes":{},"value":["html_dependency"]}},"value":[{"type":"character","attributes":{},"value":["ace"]},{"type":"character","attributes":{},"value":["1.2.6"]},{"type":"list","attributes":{"names":{"type":"character","attributes":{},"value":["file"]}},"value":[{"type":"character","attributes":{},"value":["lib/ace"]}]},{"type":"NULL"},{"type":"character","attributes":{},"value":["ace.js"]},{"type":"NULL"},{"type":"NULL"},{"type":"NULL"},{"type":"character","attributes":{},"value":["learnr"]},{"type":"logical","attributes":{},"value":[true]},{"type":"character","attributes":{},"value":["0.10.1"]}]},{"type":"list","attributes":{"names":{"type":"character","attributes":{},"value":["name","version","src","meta","script","stylesheet","head","attachment","package","all_files","pkgVersion"]},"class":{"type":"character","attributes":{},"value":["html_dependency"]}},"value":[{"type":"character","attributes":{},"value":["clipboardjs"]},{"type":"character","attributes":{},"value":["1.5.15"]},{"type":"list","attributes":{"names":{"type":"character","attributes":{},"value":["file"]}},"value":[{"type":"character","attributes":{},"value":["lib/clipboardjs"]}]},{"type":"NULL"},{"type":"character","attributes":{},"value":["clipboard.min.js"]},{"type":"NULL"},{"type":"NULL"},{"type":"NULL"},{"type":"character","attributes":{},"value":["learnr"]},{"type":"logical","attributes":{},"value":[true]},{"type":"character","attributes":{},"value":["0.10.1"]}]},{"type":"list","attributes":{"names":{"type":"character","attributes":{},"value":["name","version","src","meta","script","stylesheet","head","attachment","package","all_files","pkgVersion"]},"class":{"type":"character","attributes":{},"value":["html_dependency"]}},"value":[{"type":"character","attributes":{},"value":["ace"]},{"type":"character","attributes":{},"value":["1.2.6"]},{"type":"list","attributes":{"names":{"type":"character","attributes":{},"value":["file"]}},"value":[{"type":"character","attributes":{},"value":["lib/ace"]}]},{"type":"NULL"},{"type":"character","attributes":{},"value":["ace.js"]},{"type":"NULL"},{"type":"NULL"},{"type":"NULL"},{"type":"character","attributes":{},"value":["learnr"]},{"type":"logical","attributes":{},"value":[true]},{"type":"character","attributes":{},"value":["0.10.1"]}]},{"type":"list","attributes":{"names":{"type":"character","attributes":{},"value":["name","version","src","meta","script","stylesheet","head","attachment","package","all_files","pkgVersion"]},"class":{"type":"character","attributes":{},"value":["html_dependency"]}},"value":[{"type":"character","attributes":{},"value":["clipboardjs"]},{"type":"character","attributes":{},"value":["1.5.15"]},{"type":"list","attributes":{"names":{"type":"character","attributes":{},"value":["file"]}},"value":[{"type":"character","attributes":{},"value":["lib/clipboardjs"]}]},{"type":"NULL"},{"type":"character","attributes":{},"value":["clipboard.min.js"]},{"type":"NULL"},{"type":"NULL"},{"type":"NULL"},{"type":"character","attributes":{},"value":["learnr"]},{"type":"logical","attributes":{},"value":[true]},{"type":"character","attributes":{},"value":["0.10.1"]}]},{"type":"list","attributes":{"names":{"type":"character","attributes":{},"value":["name","version","src","meta","script","stylesheet","head","attachment","package","all_files","pkgVersion"]},"class":{"type":"character","attributes":{},"value":["html_dependency"]}},"value":[{"type":"character","attributes":{},"value":["ace"]},{"type":"character","attributes":{},"value":["1.2.6"]},{"type":"list","attributes":{"names":{"type":"character","attributes":{},"value":["file"]}},"value":[{"type":"character","attributes":{},"value":["lib/ace"]}]},{"type":"NULL"},{"type":"character","attributes":{},"value":["ace.js"]},{"type":"NULL"},{"type":"NULL"},{"type":"NULL"},{"type":"character","attributes":{},"value":["learnr"]},{"type":"logical","attributes":{},"value":[true]},{"type":"character","attributes":{},"value":["0.10.1"]}]},{"type":"list","attributes":{"names":{"type":"character","attributes":{},"value":["name","version","src","meta","script","stylesheet","head","attachment","package","all_files","pkgVersion"]},"class":{"type":"character","attributes":{},"value":["html_dependency"]}},"value":[{"type":"character","attributes":{},"value":["clipboardjs"]},{"type":"character","attributes":{},"value":["1.5.15"]},{"type":"list","attributes":{"names":{"type":"character","attributes":{},"value":["file"]}},"value":[{"type":"character","attributes":{},"value":["lib/clipboardjs"]}]},{"type":"NULL"},{"type":"character","attributes":{},"value":["clipboard.min.js"]},{"type":"NULL"},{"type":"NULL"},{"type":"NULL"},{"type":"character","attributes":{},"value":["learnr"]},{"type":"logical","attributes":{},"value":[true]},{"type":"character","attributes":{},"value":["0.10.1"]}]}]}
+</script>
+<!--/html_preserve-->
+<!--html_preserve-->
+<script type="application/shiny-prerendered" data-context="execution_dependencies">
+{"type":"list","attributes":{"names":{"type":"character","attributes":{},"value":["packages"]}},"value":[{"type":"list","attributes":{"names":{"type":"character","attributes":{},"value":["packages","version"]},"class":{"type":"character","attributes":{},"value":["data.frame"]},"row.names":{"type":"integer","attributes":{},"value":[1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,57,58,59,60,61,62,63,64,65,66,67,68,69,70,71,72,73,74,75,76,77,78]}},"value":[{"type":"character","attributes":{},"value":["assertthat","backports","base","blob","broom","cellranger","checkmate","cli","colorspace","compiler","crayon","datasets","DBI","dbplyr","digest","dplyr","ellipsis","evaluate","fansi","fastmap","forcats","fs","generics","ggplot2","glue","graphics","grDevices","grid","gtable","haven","hms","htmltools","htmlwidgets","httpuv","httr","jsonlite","knitr","later","learnr","lifecycle","lubridate","magrittr","markdown","methods","mime","modelr","munsell","pillar","pkgconfig","promises","purrr","R6","Rcpp","readr","readxl","reprex","rlang","rmarkdown","rprojroot","rstudioapi","rvest","scales","shiny","stats","stringi","stringr","tibble","tidyr","tidyselect","tidyverse","tools","utils","vctrs","withr","xfun","xml2","xtable","yaml"]},{"type":"character","attributes":{},"value":["0.2.1","1.1.10","4.0.2","1.2.1","0.7.2","1.1.0","2.0.0","2.1.0","1.4-1","4.0.2","1.3.4","4.0.2","1.1.0","1.4.4","0.6.27","1.0.2","0.3.1","0.14","0.4.1","1.0.1","0.5.0","1.5.0","0.0.2","3.3.2","1.4.2","4.0.2","4.0.2","4.0.2","0.3.0","2.3.1","0.5.3","0.5.0","1.5.2","1.5.4","1.4.2","1.7.1","1.30","1.1.0.1","0.10.1","0.2.0","1.7.9","1.5","1.1","4.0.2","0.9","0.1.8","0.5.0","1.4.6","2.0.3","1.1.1","0.3.4","2.4.1","1.0.5","1.4.0","1.3.1","0.3.0","0.4.8","2.5","1.3-2","0.11","0.3.6","1.1.1","1.5.0","4.0.2","1.5.3","1.4.0","3.0.4","1.1.2","1.1.0","1.3.0","4.0.2","4.0.2","0.3.4","2.3.0","0.18","1.3.2","1.8-4","2.2.1"]}]}]}
+</script>
+<!--/html_preserve-->
+</div>
+</div>
+
+</div> <!-- topics -->
+
+<div class="topicsContainer">
+<div class="topicsPositioner">
+<div class="band">
+<div class="bandContent topicsListContainer">
+
+<!-- begin doc-metadata -->
+<div id="doc-metadata">
+<h2 class="title toc-ignore" style="display:none;">Permutation Tests</h2>
+</div>
+<!-- end doc-metadata -->
+
+</div> <!-- bandContent.topicsListContainer -->
+</div> <!-- band -->
+</div> <!-- topicsPositioner -->
+</div> <!-- topicsContainer -->
+
+
+</div> <!-- bandContent page -->
+</div> <!-- pageContent band -->
+
+
+
+
+<script>
+// add bootstrap table styles to pandoc tables
+function bootstrapStylePandocTables() {
+  $('tr.header').parent('thead').parent('table').addClass('table table-condensed');
+}
+$(document).ready(function () {
+  bootstrapStylePandocTables();
+});
+</script>
+
+
+<!-- dynamically load mathjax for compatibility with self-contained -->
+<script>
+  (function () {
+    var script = document.createElement("script");
+    script.type = "text/javascript";
+    script.src  = "https://mathjax.rstudio.com/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML";
+    document.getElementsByTagName("head")[0].appendChild(script);
+  })();
+</script>
+
+
+</body>
+
+</html>
