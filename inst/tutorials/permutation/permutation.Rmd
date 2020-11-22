@@ -59,7 +59,7 @@ But actually, confidence intervals can be "inverted" to compute p-values, and th
 
 The main idea is as follows: a p-value can be characterized as being equal to the **smallest significance level at which we would still reject the null hypothesis**. For example, say we computed a p-value of 0.012. We would reject the null hypothesis for $\alpha = 0.05$, but we would *not* reject if $\alpha = 0.01$. In fact, we would only reject for significance levels $\alpha \geq 0.012$.
 
-How does this relate to confidence intervals? They are also constructed using significance levels! Indeed, a 95% confidence correspond to a significance level of $\alpha = 0.05$. On the other hand, we can reject the null hypothesis $H_0:\theta = \theta_0$ if the value $\theta_0$ is contained in the confidence interval.
+How does this relate to confidence intervals? They are also constructed using significance levels! Indeed, a 95% confidence correspond to a significance level of $\alpha = 0.05$. On the other hand, we reject the null hypothesis $H_0:\theta = \theta_0$ if the value $\theta_0$ is outside the confidence interval.
 
 This gives us a way to "invert" confidence intervals and compute a p-value: the p-value is equal to the smallest significance level $\alpha$ such that $\theta_0$ is **not** included in the $(1 - \alpha)$% confidence interval.
 
