@@ -1,0 +1,267 @@
+---
+title: "Numerical Methods"
+output: 
+  learnr::tutorial:
+    progressive: true
+    allow_skip: true
+runtime: shiny_prerendered
+description: >
+  Learn about numerical methods for integration.
+---
+
+```{r setup, include=FALSE}
+library(learnr)
+knitr::opts_chunk$set(echo = FALSE)
+```
+
+## Welcome
+
+This is a tutorial on Numerical Methods. It was created for the course STAT3150--Statistical Computing at the University of Manitoba.
+
+###  
+
+In this tutorial, we continue our discussion of numerical methods, but now in the context of integration. Specifically, we will look at
+
+  * the trapezoidal rule
+  * adaptive Gaussian quadrature using `integrate`.
+  
+Similarly to the lecture on root finding, you should be able to implement the trapezoidal rule, but for adaptive Gaussian quadrature, we will use the implementation in base `R`.
+
+## Trapezoidal rule
+
+###
+
+Earlier in the semester, we discussed Monte Carlo integration as a way to estimate integrals that can be difficult to compute analytically. In this tutorial, we will look at a different way of estimating these integrals. Specifically, we will use **numerical methods**.
+
+Recall from calculus that the Riemann integral of a function $f(x)$ on the interval $[a, b]$ is defined as the limit (if it exists) of *Riemann sums*:
+
+$$\int_a^b f(x) dx = \lim_{n\to\infty} \sum_{i=0}^{n-1}f(t_i)(x_{i+1} - x_i),$$
+where $a=x_0<\cdots<x_n = b$ is a partition of the interval $[a,b]$, and $t_i\in[x_i, x_{i+1}]$. Common choices for $t_i$ are the lower and upper bounds of the interval, leading to the left and right Riemann sums, respectively.
+
+###
+
+The definition of the integral as a limit of Riemann sums gives us a natural way to numerical approximate the integral: Take $n$ large, and use the estimate $\sum_{i=0}^{n-1}f(t_i)(x_{i+1} - x_i)$.
+
+Let's look at an example:
+
+$$\int_2^8 3\log(x)dx.$$
+
+Run the code below to find an approximation using *left* Riemann sums:
+
+```{r riemann1, exercise = TRUE, exercise.eval = FALSE}
+n <- 1000
+x_vec <- seq(2, 8, length.out = n + 1)
+# For left Riemann sums, we take the lower bound
+t_vec <- 3*log(x_vec[-(n+1)])
+
+sum(t_vec*diff(x_vec))
+```
+
+Modify the code above to find an approximation using *right* Riemann sums:
+
+```{r riemann2, exercise = TRUE, exercise.eval = FALSE}
+
+```
+
+```{r riemann2-solution}
+n <- 1000
+x_vec <- seq(2, 8, length.out = n + 1)
+# For right Riemann sums, we take the upper bound
+t_vec <- 3*log(x_vec[-1])
+
+sum(t_vec*diff(x_vec))
+```
+
+###
+
+Let's visualize what is going on with these two Riemann sums:
+
+```{r eval = TRUE, echo = FALSE}
+par(mfrow = c(1, 2))
+plot(function(x) 3*log(x), from = 1, to = 10,
+     xlab = "", ylab = "", ylim = c(0, 3*log(10)),
+     main = "Left Riemann sum")
+abline(h = 0)
+rect(xleft = c(2, 4, 6),
+     xright = c(4, 6, 8),
+     ybottom = 0,
+     ytop = 3*log(c(2, 4, 6)))
+plot(function(x) 3*log(x), from = 1, to = 10,
+     xlab = "", ylab = "", ylim = c(0, 3*log(10)),
+     main = "Right Riemann sum")
+abline(h = 0)
+rect(xleft = c(2, 4, 6),
+     xright = c(4, 6, 8),
+     ybottom = 0,
+     ytop = 3*log(c(4, 6, 8),))
+```
+
+Because our function is monotone increasing, we can see that the left Riemann sums are always *underestimating* the area under the curve, while the right Riemann sums are always *overestimating*. One way to mitigate this problem is to instead take the mid-point:
+
+```{r eval = TRUE, echo = FALSE}
+plot(function(x) 3*log(x), from = 1, to = 10,
+     xlab = "", ylab = "", ylim = c(0, 3*log(10)),
+     main = "Mid-point Riemann sum")
+abline(h = 0)
+rect(xleft = c(2, 4, 6),
+     xright = c(4, 6, 8),
+     ybottom = 0,
+     ytop = 3*log(c(3, 5, 7)))
+```
+
+Find an approximation of the integral $\int_2^8 3\log(x)dx$ using *mid-point* Riemann sums:
+
+```{r riemann3, exercise = TRUE, exercise.eval = FALSE}
+
+```
+
+```{r riemann3-solution}
+n <- 1000
+x_vec <- seq(2, 8, length.out = n + 1)
+# For mid-point Riemann sums, we take the mid-point
+t_vec <- 3*log(x_vec[-(n+1)] + 0.5*diff(x_vec))
+
+sum(t_vec*diff(x_vec))
+```
+
+###
+
+In this interactive tutorial, we will actually take a completely different approach: instead of approximating the integral with rectangles, we will use trapezes. Recall that the area of a trapeze with bases $b_1,b_2$ and height $h$ is equal to 
+$$A = h\left(\frac{b_1 + b_2}{2}\right).$$
+
+Let's look at a picture first:
+
+```{r eval = TRUE, echo = FALSE}
+plot(function(x) 3*log(x), from = 1, to = 10,
+     xlab = "", ylab = "", ylim = c(0, 3*log(10)),
+     main = "Mid-point Riemann sum")
+abline(h = 0)
+for (step in c(0, 2, 4)) {
+  polygon(x = c(2, 2, 4, 4) + step,
+          y = c(0, 3*log(2 + step), 
+                3*log(4 + step), 0))
+}
+```
+
+On the interval $[x_i, x_{i+1}]$, we are drawing a trapeze with $h = x_{i+1} - x_i$, $b_1 = f(x_i)$ and $b_2 = f(x_{i+1})$. This gives us the **trapezoidal rule** for approximating a definite integral:
+$$\int_{a}^b f(x)dx \approx = \sum_{i=0}^{n-1}\frac{f(x_i) + f(x_{i+1})}{2}(x_{i+1} - x_i).$$
+
+Use the trapezoidal rule to find an approximation of the integral $\int_2^8 3\log(x)dx$:
+
+```{r riemann4, exercise = TRUE, exercise.eval = FALSE}
+
+```
+
+```{r riemann4-solution}
+n <- 1000
+x_vec <- seq(2, 8, length.out = n + 1)
+# For the trapezoidal rule, we take the average
+# of the value at lower and upper bound
+avg_vec <- 0.5*(3*log(x_vec[-(n+1)]) + 3*log(x_vec[-1]))
+
+sum(avg_vec*diff(x_vec))
+```
+
+The trapezoidal rule is part of a large family of rules for numerical integration called **Newton-Cotes formulas**. If you take a course on numerical analysis, you will learn more about the accuracy and asymptotic properties of these rules.
+
+## Adaptive Gaussian quadrature
+
+### 
+
+The trapezoidal rule is simple and relatively accurate, but it suffers from a few drawbacks:
+
+  - It can be inefficient to have equally spaced points when the function is almost linear.
+  - There is no obvious way of using that rule to approximate improper integrals.
+  
+The first issue can be addressed by using **adaptive rules**, i.e. instead of subdividing the interval $[a,b]$ into $n$ subintervals of equal length, we use an iterative process: find where the approximation is not accurate enough, and only subdivide intervals if it improves accuracy. The exact details are beyond the scope of this course, but if you want to see how the trapezoidal rule can be made adaptive, have a look at the source code of the function `pracma::trapzfun`.
+
+The second issue can be addressed by using a different class of numerical integration rules, called **Gaussian quadrature** (quadrature is an old-fashioned name for numerical integration). Gaussian quadrature uses the following idea for approximating integrals:
+$$ \int_a^b f(x) dx \approx \sum_{i=0}^{n-1}w_i f(x_i),$$
+where $w_i$ are weights and $x_i\in[a,b]$. Again, the details are beyond the scope of this course, but note that:
+
+  - The points $x_i$ are chosen to be the roots of orthogonal polynomials.
+  - The weights $w_i = w(x_i)$ are computed using a weight function $w$.
+  
+The following table, adapted from [Wikipedia](https://en.wikipedia.org/wiki/Gaussian_quadrature#Gauss%E2%80%93Legendre_quadrature), gives an idea of the types of polynomials and weight functions one may use:
+
+| Interval | $w(x)$ | Orthogonal polynomials | Method name |
+|:--------:|:------:|:----------------------:|:-----------:|
+| $[−1, 1]$  | 1      | Legendre polynomials   | Gauss–Legendre quadrature |
+| $(−1, 1)$  | $\left(1 - x\right)^\alpha \left(1 + x\right)^\beta,\quad \alpha, \beta > -1$ | Jacobi polynomials | Gauss–Jacobi quadrature |
+| $(−1, 1)$ | $\frac{1}{\sqrt{1 - x^2}}$ | Chebyshev polynomials (first kind) | Chebyshev–Gauss quadrature |
+| $[−1, 1]$ | $\sqrt{1 - x^2}$ | Chebyshev polynomials | Chebyshev–Gauss quadrature |
+| $[0, \infty)$  | $e^{-x}$ | Laguerre polynomials | Gauss–Laguerre quadrature |
+| $[0, \infty)$  | $x^\alpha e^{-x},\quad \alpha>-1$ | Generalized Laguerre polynomials | Gauss–Laguerre quadrature |
+| $(-\infty, \infty)$ | $e^{-x^2}$ | Hermite polynomials | Gauss–Hermite quadrature |
+
+###
+
+Instead of focusing on the implementation details, we will instead use the built-in implementation of adaptive Gaussian quadrature. To use this built-in implementation, we can use the function `integrate`.
+
+Run the code below
+
+```{r gauss1, exercise = TRUE, exercise.eval = FALSE}
+integrate(f = function(x) 3*log(x),
+          lower = 2, upper = 8)
+```
+
+This is a powerful way of approximating integrals, but note that it doesn't always work:
+
+```{r echo = TRUE, eval = TRUE, error=TRUE}
+# From Midterm 1
+integrate(f = function(x) cos(3*x)/(x^2 + 4),
+          lower = -Inf, upper = Inf)
+```
+
+###
+
+This brings us to our final discussion point: when should we use numerical integration vs Monte Carlo integration?
+
+A course on Numerical Analysis would give you the proper tools to understand when numerical integration works and when it doesn't. For Monte Carlo integration, the Law of Large Numbers helps us understand when it works: if we can write the integral as an expected value $E(g(X))$, and we know the integral exists, then we can approximate it. 
+
+One clear situation where Monte Carlo integration is clearly superior to numerical integration is *higher-dimensional* integrals, i.e. when the input of the function $f$ has dimension two or more. This is because the accuracy of numerical methods decreases when the dimension of the integral increases. Perhaps surprisingly, the accuracy of Monte Carlo integration is actually independent of the dimension of the integral!
+
+Finally, one last important aspect to keep in mind when contrasting Monte Carlo and numerical integration: *accuracy* has a different meaning.
+
+  - For numerical integration, the approximation is deterministic, and therefore we can look at the approximation error $\left\lvert \int_a^b f(x) dx - \sum_{i=0}^{n-1}w_i f(x_i)\right\rvert$.
+  - For Monte Carlo integration, the approximation is stochastic, and therefore we can only talk about the probability that our approximation is within a certain distance of the true value:
+  $$P\left(\left\lvert \int_a^b f(x) dx - \frac{1}{n}\sum_{i=1}^{n}f(X_i)\right\rvert < \epsilon\right).$$
+  
+## Exercises
+
+### Exercise 1
+
+Use the trapezoidal rule to approximate the following integral:
+
+$$ \int_0^1 x^{3/2} dx.$$
+
+```{r num-ex1, exercise = TRUE, exercise.eval = FALSE}
+
+```
+
+
+```{r num-ex1-solution}
+n <- 1000
+x_vec <- seq(0, 1, length.out = n + 1)
+# For the trapezoidal rule, we take the average
+# of the value at lower and upper bound
+avg_vec <- 0.5*(x_vec[-(n+1)]^1.5 + x_vec[-1]^1.5)
+
+sum(avg_vec*diff(x_vec))
+```
+
+### Exercise 2
+
+Use the function `integrate` to approximate the following integral:
+
+$$ \int_0^\infty\frac{1}{\sqrt{x}(x + 1)}.$$
+
+```{r num-ex2, exercise = TRUE, exercise.eval = FALSE}
+
+```
+
+
+```{r num-ex2-solution}
+integrate(f = function(x) 1/(sqrt(x)*(x + 1)), 
+          lower = 0, upper = Inf)
+```
