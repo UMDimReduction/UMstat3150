@@ -29,4 +29,3 @@ These are the planned tutorials:
   6. `bootstrap`: Bootstrap and Jackknife
   7. `permutation`: Permutation tests
   8. `numerical`: Numerical methods
-  9. `optimisation`: Introduction to optimisation
